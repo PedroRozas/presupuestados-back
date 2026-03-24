@@ -1,0 +1,57 @@
+import {
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { Request } from 'express';
+import { SupabaseService } from '../../supabase/supabase.service.js';
+
+export interface AuthenticatedUser {
+  id: string;
+  email: string;
+}
+
+/**
+ * Guard JWT que valida el Bearer token contra Supabase Auth.
+ * Si el token es válido, inyecta req.user con { id, email }.
+ * La validación del usuario ocurre aquí en el Guard, no en el SupabaseService.
+ */
+@Injectable()
+export class AuthGuard implements CanActivate {
+  constructor(private readonly supabaseService: SupabaseService) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const request = context.switchToHttp().getRequest<Request>();
+    const token = this.extractTokenFromHeader(request);
+
+    if (!token) {
+      throw new UnauthorizedException(
+        'Token de autenticación no proporcionado',
+      );
+    }
+
+    const { data, error } = await this.supabaseService
+      .getClient()
+      .auth.getUser(token);
+
+    if (error || !data.user) {
+      throw new UnauthorizedException('Token inválido o expirado');
+    }
+
+    (request as Request & { user: AuthenticatedUser }).user = {
+      id: data.user.id,
+      email: data.user.email ?? '',
+    };
+
+    return true;
+  }
+
+  private extractTokenFromHeader(request: Request): string | undefined {
+    const authHeader = request.headers['authorization'];
+    if (!authHeader) return undefined;
+
+    const [type, token] = authHeader.split(' ');
+    return type === 'Bearer' ? token : undefined;
+  }
+}
