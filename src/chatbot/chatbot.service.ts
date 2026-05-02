@@ -1,50 +1,94 @@
 import {
+  Inject,
   Injectable,
   InternalServerErrorException,
   BadRequestException,
-} from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { GoogleGenAI } from '@google/genai';
-import { ExpensesService } from '../expenses/expenses.service.js';
-import { SupabaseService } from '../supabase/supabase.service.js';
-import { ChatDto } from './dto/chat.dto.js';
+} from '@nestjs/common'
+import { NodePgDatabase } from 'drizzle-orm/node-postgres'
+import { eq, and } from 'drizzle-orm'
+import { ConfigService } from '@nestjs/config'
+import { GoogleGenAI } from '@google/genai'
+import { DRIZZLE } from '../database/database.module.js'
+import * as schema from '../database/schema/index.js'
+import { profiles, familyMembers } from '../database/schema/index.js'
+import { ExpensesService } from '../expenses/expenses.service.js'
+import { ChatDto } from './dto/chat.dto.js'
 
 @Injectable()
 export class ChatbotService {
-  private ai: GoogleGenAI;
+  private ai: GoogleGenAI
 
   constructor(
     private readonly configService: ConfigService,
     private readonly expensesService: ExpensesService,
-    private readonly supabaseService: SupabaseService,
+    @Inject(DRIZZLE) private readonly db: NodePgDatabase<typeof schema>,
   ) {
-    const apiKey = this.configService.get<string>('GEMINI_API_KEY');
+    const apiKey = this.configService.get<string>('GEMINI_API_KEY')
     if (!apiKey) {
-      throw new InternalServerErrorException('GEMINI_API_KEY no configurada');
+      throw new InternalServerErrorException('GEMINI_API_KEY no configurada')
     }
-    this.ai = new GoogleGenAI({ apiKey });
+    this.ai = new GoogleGenAI({ apiKey })
   }
 
   async chat(userId: string, dto: ChatDto) {
-    const supabase = this.supabaseService.getClient();
+    const result = await this.db
+      .select({ coupleId: profiles.coupleId, isPremium: profiles.isPremium, fullName: profiles.fullName })
+      .from(profiles)
+      .where(eq(profiles.id, userId))
+      .limit(1)
 
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('couple_id, is_premium')
-      .eq('id', userId)
-      .single();
+    const profile = result[0]
 
-    if (profileError || !profile) {
+    if (!profile) {
       throw new InternalServerErrorException(
         'Error al obtener perfil del usuario',
-      );
+      )
     }
 
-    if (!profile.couple_id) {
-      throw new BadRequestException('El usuario no pertenece a una pareja');
+    if (!profile.coupleId) {
+      throw new BadRequestException('El usuario no pertenece a una pareja')
     }
 
-    const coupleId = profile.couple_id;
+    const coupleId = profile.coupleId
+
+    const memberResult = await this.db
+      .select({ id: familyMembers.id, name: familyMembers.name })
+      .from(familyMembers)
+      .where(and(eq(familyMembers.coupleId, coupleId), eq(familyMembers.linkedUserId, userId)))
+      .limit(1)
+
+    const currentMember = memberResult[0]
+
+    const sanitize = (text: string) =>
+      text
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '') // control chars
+        .trim()
+        .slice(0, 1000)
+
+    const INJECTION_PATTERNS = [
+      /ignore\s+(previous|above|all)\s+instructions?/i,
+      /new\s+instructions?:/i,
+      /system\s*prompt/i,
+      /you\s+are\s+now/i,
+      /forget\s+(everything|all|your)/i,
+      /act\s+as\s+(a\s+)?(?!financial)/i,
+      /jailbreak/i,
+      /DAN\b/,
+    ]
+
+    const isSuspicious = (text: string) =>
+      INJECTION_PATTERNS.some((pattern) => pattern.test(text))
+
+    const cleanMessage = sanitize(dto.message)
+
+    if (isSuspicious(cleanMessage)) {
+      throw new BadRequestException('Mensaje no permitido')
+    }
+
+    const cleanHistory = (dto.history ?? [])
+      .slice(-10)
+      .map((m) => ({ role: m.role, text: sanitize(m.text) }))
+      .filter((m) => !isSuspicious(m.text))
 
     const tools = [
       {
@@ -68,17 +112,27 @@ export class ChatbotService {
           {
             name: 'get_incomes',
             description:
-              'Obtiene los ingresos de la pareja para un mes y año específicos para verificar sueldos o calculo proporcional.',
+              'Obtiene todos los ingresos fijos (sueldos) de la pareja. Los ingresos son registros permanentes, no varían por mes. Úsalo siempre que necesites saber los sueldos o hacer cálculos proporcionales.',
             parameters: {
               type: 'OBJECT',
               properties: {
-                year: { type: 'INTEGER', description: 'El año, e.g. 2026' },
+                year: { type: 'INTEGER', description: 'El año (ignorado internamente, los ingresos son fijos)' },
                 month: {
                   type: 'INTEGER',
-                  description: 'El mes numerico, e.g. 3 para marzo',
+                  description: 'El mes (ignorado internamente, los ingresos son fijos)',
                 },
               },
               required: ['year', 'month'],
+            },
+          },
+          {
+            name: 'get_deductions',
+            description:
+              'Obtiene todas las deducciones de salario (AFP, salud, impuestos, etc.) de la pareja. Son registros permanentes por persona. Úsalo para calcular el sueldo líquido de cada uno.',
+            parameters: {
+              type: 'OBJECT',
+              properties: {},
+              required: [],
             },
           },
           {
@@ -101,16 +155,49 @@ export class ChatbotService {
           },
         ],
       },
-    ];
+    ]
 
-    const systemInstruction = `Eres un asistente financiero inteligente integrado en la app Presupuestados. 
-Ayudas a los usuarios (una pareja) a gestionar sus gastos e ingresos. Responde de forma concisa, clara y amigable.
-Puedes solicitar datos en tiempo real llamando a las herramientas proporcionadas (get_monthly_expenses, get_incomes, update_expense_category).
-No muestres los IDs UUID al usuario si no es estrictamente necesario, usa las descripciones de los gastos.`;
+    const now = new Date()
+    const currentMonth = now.getMonth() + 1
+    const currentYear = now.getFullYear()
 
-    const contents: any[] = [{ role: 'user', parts: [{ text: dto.message }] }];
+    const userName = profile.fullName ?? 'el usuario'
+    const memberName = currentMember?.name ?? userName
+    const memberId = currentMember?.id ?? null
 
-    let response;
+    const systemInstruction = `Eres un asistente financiero inteligente integrado en la app Presupuestados.
+Ayudas a una pareja a gestionar sus gastos e ingresos compartidos. Responde de forma concisa, clara y amigable.
+La fecha actual es ${currentYear}-${String(currentMonth).padStart(2, '0')}. Cuando el usuario diga "este mes" o similar, usa mes=${currentMonth} y año=${currentYear} sin pedirle confirmación.
+
+## Usuario actual
+- Nombre: ${memberName}
+- family_member_id: ${memberId ?? 'desconocido'}
+
+## Estructura de gastos
+Cada gasto tiene:
+- paid_by: quién pagó (family_member_id)
+- assigned_user_id: si es individual, a quién se asigna (family_member_id); si es null, es compartido
+- split_method: '50/50' | 'proportional' | 'individual'
+
+## Cómo calcular el sobrante INDIVIDUAL del usuario actual
+1. Llama a get_incomes → filtra los ingresos donde user_id = ${memberId ?? 'el id del usuario actual'}
+2. Llama a get_deductions → filtra deducciones donde user_id = ${memberId ?? 'el id del usuario actual'} → sueldo líquido = ingreso bruto - deducciones
+3. Llama a get_monthly_expenses → para cada gasto:
+   - Si split_method = 'individual' y assigned_user_id = ${memberId ?? 'el id del usuario actual'}: sumar monto completo
+   - Si split_method = '50/50': sumar monto / 2
+   - Si split_method = 'proportional': necesitas calcular el % proporcional del usuario sobre el total de sueldos líquidos de la pareja
+   - Si is_credit = true: restar del total de gastos
+4. Sobrante = sueldo líquido del usuario - gastos que le corresponden
+
+Cuando el usuario diga "mi dinero", "mis gastos", "mi sobrante" — calcular SOLO para ${memberName}, no la pareja completa.
+No muestres los IDs UUID al usuario, usa las descripciones.`
+
+    const contents: any[] = [
+      ...cleanHistory.map((m) => ({ role: m.role, parts: [{ text: m.text }] })),
+      { role: 'user', parts: [{ text: cleanMessage }] },
+    ]
+
+    let response
     try {
       response = await this.ai.models.generateContent({
         model: 'gemini-2.5-flash',
@@ -120,69 +207,72 @@ No muestres los IDs UUID al usuario si no es estrictamente necesario, usa las de
           // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
           tools: tools as any,
         },
-      });
+      })
     } catch (e: unknown) {
-      const errorMessage = e instanceof Error ? e.message : String(e);
+      const errorMessage = e instanceof Error ? e.message : String(e)
       throw new InternalServerErrorException(
         `Error contacting AI model: ${errorMessage}`,
-      );
+      )
     }
 
-    // Process function call if any
-    const functionCalls = response.functionCalls;
-    if (functionCalls && functionCalls.length > 0) {
-      const call = functionCalls[0];
-      let functionResultData;
+    // Procesar function calls en loop (el modelo puede necesitar múltiples herramientas)
+    const MAX_ROUNDS = 5
+    let rounds = 0
 
-      try {
-        if (call.name === 'get_monthly_expenses') {
-          const args = call.args as { year: number; month: number };
-          functionResultData = await this.expensesService.getMonthlyExpenses(
-            coupleId,
-            args.year,
-            args.month,
-          );
-        } else if (call.name === 'get_incomes') {
-          const args = call.args as { year: number; month: number };
-          functionResultData = await this.expensesService.getIncomes(
-            coupleId,
-            args.year,
-            args.month,
-          );
-        } else if (call.name === 'update_expense_category') {
-          const args = call.args as { expenseId: string; categoryId: number };
-          functionResultData = await this.expensesService.updateExpenseCategory(
-            coupleId,
-            args.expenseId,
-            args.categoryId,
-          );
-        } else {
-          functionResultData = { error: 'Unknown function request from model' };
-        }
-      } catch (e: unknown) {
-        const errorMessage = e instanceof Error ? e.message : String(e);
-        functionResultData = { error: errorMessage };
-      }
+    while (rounds < MAX_ROUNDS) {
+      const functionCalls = response.functionCalls
+      if (!functionCalls || functionCalls.length === 0) break
 
-      // Add Model's response part containing the function call
       if (response.candidates && response.candidates.length > 0) {
-        contents.push(response.candidates[0].content);
+        contents.push(response.candidates[0].content)
       }
 
-      // Add functioning response part
-      contents.push({
-        role: 'user',
-        parts: [
-          {
-            functionResponse: {
-              name: call.name,
-              response: { result: functionResultData },
-            },
-          },
-        ],
-      });
+      const functionResponseParts: any[] = []
 
-      // Synthesis step
+      for (const call of functionCalls) {
+        let functionResultData: unknown
+
+        try {
+          if (call.name === 'get_monthly_expenses') {
+            const args = call.args as { year: number; month: number }
+            functionResultData = await this.expensesService.getMonthlyExpenses(
+              coupleId,
+              args.year,
+              args.month,
+            )
+          } else if (call.name === 'get_incomes') {
+            const args = call.args as { year: number; month: number }
+            functionResultData = await this.expensesService.getIncomes(
+              coupleId,
+              args.year,
+              args.month,
+            )
+          } else if (call.name === 'get_deductions') {
+            functionResultData = await this.expensesService.getDeductions(coupleId)
+          } else if (call.name === 'update_expense_category') {
+            const args = call.args as { expenseId: string; categoryId: number }
+            functionResultData = await this.expensesService.updateExpenseCategory(
+              coupleId,
+              args.expenseId,
+              args.categoryId,
+            )
+          } else {
+            functionResultData = { error: 'Unknown function' }
+          }
+        } catch (e: unknown) {
+          functionResultData = { error: e instanceof Error ? e.message : String(e) }
+        }
+
+        functionResponseParts.push({
+          functionResponse: {
+            name: call.name,
+            response: { result: functionResultData },
+          },
+        })
+      }
+
+      contents.push({ role: 'user', parts: functionResponseParts })
+
       try {
         response = await this.ai.models.generateContent({
           model: 'gemini-2.5-flash',
@@ -192,15 +282,17 @@ No muestres los IDs UUID al usuario si no es estrictamente necesario, usa las de
             // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
             tools: tools as any,
           },
-        });
+        })
       } catch (e: unknown) {
-        const errorMessage = e instanceof Error ? e.message : String(e);
+        const errorMessage = e instanceof Error ? e.message : String(e)
         throw new InternalServerErrorException(
           `Error requesting final synthesis from AI: ${errorMessage}`,
-        );
+        )
       }
+
+      rounds++
     }
 
-    return { response: response.text };
+    return { response: response.text }
   }
 }

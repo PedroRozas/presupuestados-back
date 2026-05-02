@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthGuard, AuthenticatedUser } from '../common/guards/auth.guard.js';
 import { CouplesService } from './couples.service.js';
@@ -20,5 +20,21 @@ export class CouplesController {
     @Req() req: Request & { user: AuthenticatedUser },
   ): Promise<{ message: string }> {
     return this.couplesService.joinCouple(req.user.id, dto.p_code);
+  }
+
+  @Get('partner-email')
+  @UseGuards(AuthGuard)
+  async getPartnerEmail(
+    @Req() req: Request & { user: AuthenticatedUser },
+  ): Promise<{ email: string | null }> {
+    return this.couplesService.getLinkedPartnerEmail(req.user.id);
+  }
+
+  @Get('me')
+  @UseGuards(AuthGuard)
+  async getMyCouple(
+    @Req() req: Request & { user: AuthenticatedUser },
+  ): Promise<{ id: string; inviteCode: string }> {
+    return this.couplesService.getMyCouple(req.user.id);
   }
 }

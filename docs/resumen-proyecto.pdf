@@ -1,0 +1,920 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Count 5 /Kids [6 0 R 8 0 R 10 0 R 12 0 R 14 0 R] >>
+endobj
+3 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+5 0 obj
+<< /Length 3866 >>
+stream
+BT
+/F2 22 Tf
+1 0 0 1 54.00 775.89 Tm
+(Resumen del proyecto Presupuestados Back) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 731.89 Tm
+(Fecha de elaboracion: 2026-03-14) Tj
+ET
+BT
+/F2 15 Tf
+1 0 0 1 54.00 699.89 Tm
+(Vision general) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 667.89 Tm
+(Presupuestados Back es una API REST construida con NestJS y TypeScript para soportar una) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 653.89 Tm
+(aplicacion de gestion financiera enfocada en parejas u hogares. El backend centraliza) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 639.89 Tm
+(autenticacion, perfiles, vinculacion entre miembros, registro de gastos, ingresos,) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 625.89 Tm
+(presupuestos, deducciones, dashboard consolidado y funciones asistidas por IA.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 603.89 Tm
+(La aplicacion usa Supabase como plataforma principal de datos y autenticacion. El backend) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 589.89 Tm
+(opera con una service role key para ejecutar consultas directas sobre la base de datos,) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 575.89 Tm
+(mientras que la identidad del usuario se valida con un guard que verifica el Bearer token) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 561.89 Tm
+(contra Supabase Auth.) Tj
+ET
+BT
+/F2 15 Tf
+1 0 0 1 54.00 529.89 Tm
+(Stack tecnico) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 497.89 Tm
+(- Framework principal: NestJS 11) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 483.89 Tm
+(- Lenguaje: TypeScript) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 469.89 Tm
+(- Runtime: Node.js) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 455.89 Tm
+(- Base de datos y auth: Supabase) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 441.89 Tm
+(- Documentacion de API: Swagger en `/api`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 427.89 Tm
+(- Validacion de entrada: `class-validator` y `ValidationPipe`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 413.89 Tm
+(- IA generativa: Google Gemini mediante `@google/genai`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 399.89 Tm
+(- Carga de archivos: `multer`) Tj
+ET
+BT
+/F2 15 Tf
+1 0 0 1 54.00 367.89 Tm
+(Arquitectura general) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 335.89 Tm
+(El proyecto sigue una arquitectura modular de NestJS. AppModule integra los modulos) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 321.89 Tm
+(funcionales y main.ts configura validacion global y documentacion Swagger.) Tj
+ET
+BT
+/F2 12 Tf
+1 0 0 1 54.00 293.89 Tm
+(Modulos principales) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 267.89 Tm
+(- `AuthModule`: registro, login, refresh, logout e inicializacion del usuario.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 253.89 Tm
+(- `CouplesModule`: union de usuarios a una pareja mediante codigo de invitacion.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 239.89 Tm
+(- `ProfilesModule`: consulta y actualizacion del perfil autenticado.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 225.89 Tm
+(- `ExpensesModule`: CRUD de gastos, soporte para gastos recurrentes y eliminacion por) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 72.00 211.89 Tm
+(lote.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 197.89 Tm
+(- `IncomesModule`: CRUD de ingresos del hogar.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 183.89 Tm
+(- `BudgetsModule`: CRUD de presupuestos.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 169.89 Tm
+(- `DeductionsModule`: CRUD de deducciones.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 155.89 Tm
+(- `DashboardModule`: entrega consolidada de miembros, ingresos, deducciones,) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 72.00 141.89 Tm
+(presupuestos y gastos.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 127.89 Tm
+(- `AIModule`: procesamiento de cartolas o estados de cuenta para extraer gastos) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 72.00 113.89 Tm
+(automaticamente.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 99.89 Tm
+(- `ChatbotModule`: asistente conversacional con acceso controlado a datos financieros.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 85.89 Tm
+(- `SupabaseModule`: encapsula la creacion del cliente tipado de Supabase.) Tj
+ET
+BT
+/F1 9 Tf
+1 0 0 1 471.28 40 Tm
+(Pagina 1 de 5) Tj
+ET
+endstream
+endobj
+6 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 5 0 R >>
+endobj
+7 0 obj
+<< /Length 3284 >>
+stream
+BT
+/F2 15 Tf
+1 0 0 1 54.00 773.89 Tm
+(Flujo de autenticacion y seguridad) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 741.89 Tm
+(- El backend espera tokens Bearer emitidos por Supabase Auth.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 727.89 Tm
+(- `AuthGuard` extrae el token del header `Authorization`, valida el usuario con) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 72.00 713.89 Tm
+(`supabase.auth.getUser\(token\)` y adjunta `req.user`.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 699.89 Tm
+(- La aplicacion usa `ValidationPipe` global con `whitelist`, `forbidNonWhitelisted` y) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 72.00 685.89 Tm
+(`transform`.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 671.89 Tm
+(- La mayoria de los endpoints de negocio requieren autenticacion.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 657.89 Tm
+(- El cliente de Supabase se inicializa con `SUPABASE_SERVICE_KEY`, por lo que el) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 72.00 643.89 Tm
+(control de acceso depende fuertemente de la validacion realizada en NestJS.) Tj
+ET
+BT
+/F2 15 Tf
+1 0 0 1 54.00 611.89 Tm
+(Integracion con Supabase) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 579.89 Tm
+(SupabaseService crea un cliente tipado usando database.types.ts. La intencion del) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 565.89 Tm
+(proyecto es concentrar toda la logica de negocio en el backend y evitar que el frontend) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 551.89 Tm
+(consuma la base de datos directamente.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 529.89 Tm
+(Variables de entorno detectadas:) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 507.89 Tm
+(- `SUPABASE_URL`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 493.89 Tm
+(- `SUPABASE_SERVICE_KEY`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 479.89 Tm
+(- `PORT`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 457.89 Tm
+(Ademas, los modulos de IA requieren GEMINI_API_KEY, aunque esa variable no aparece en) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 443.89 Tm
+(.env.example.) Tj
+ET
+BT
+/F2 15 Tf
+1 0 0 1 54.00 411.89 Tm
+(Funcionalidades implementadas) Tj
+ET
+BT
+/F2 12 Tf
+1 0 0 1 54.00 373.89 Tm
+(1. Autenticacion y onboarding) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 347.89 Tm
+(Endpoints detectados:) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 325.89 Tm
+(- `POST /auth/register`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 311.89 Tm
+(- `POST /auth/login`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 297.89 Tm
+(- `POST /auth/refresh`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 283.89 Tm
+(- `POST /auth/logout`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 269.89 Tm
+(- `POST /auth/initialize`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 247.89 Tm
+(Este modulo se encarga de crear usuarios, iniciar sesion, renovar tokens y completar la) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 233.89 Tm
+(inicializacion de datos del usuario recien creado.) Tj
+ET
+BT
+/F2 12 Tf
+1 0 0 1 54.00 205.89 Tm
+(2. Gestion de parejas y perfiles) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 179.89 Tm
+(Endpoints detectados:) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 157.89 Tm
+(- `POST /couples/join`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 143.89 Tm
+(- `GET /profiles/me`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 129.89 Tm
+(- `PUT /profiles/me`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 107.89 Tm
+(La logica apunta a asociar usuarios a una unidad familiar o pareja y permitir la) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 93.89 Tm
+(administracion de su perfil principal.) Tj
+ET
+BT
+/F1 9 Tf
+1 0 0 1 471.28 40 Tm
+(Pagina 2 de 5) Tj
+ET
+endstream
+endobj
+8 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 7 0 R >>
+endobj
+9 0 obj
+<< /Length 2913 >>
+stream
+BT
+/F2 12 Tf
+1 0 0 1 54.00 777.89 Tm
+(3. Gestion financiera central) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 751.89 Tm
+(#### Gastos) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 729.89 Tm
+(Endpoints detectados:) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 707.89 Tm
+(- `GET /expenses`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 693.89 Tm
+(- `POST /expenses`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 679.89 Tm
+(- `PUT /expenses/:id`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 665.89 Tm
+(- `PUT /expenses/recurring/:id`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 651.89 Tm
+(- `PUT /expenses/recurring/:id/stop`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 637.89 Tm
+(- `DELETE /expenses/batch`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 623.89 Tm
+(- `DELETE /expenses/:id`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 601.89 Tm
+(El modulo de gastos es uno de los nucleos del sistema. Soporta operaciones CRUD, manejo) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 587.89 Tm
+(de recurrencia y eliminacion por lotes, lo que calza con la importacion automatizada) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 573.89 Tm
+(desde cartolas.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 551.89 Tm
+(#### Ingresos) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 529.89 Tm
+(Endpoints detectados:) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 507.89 Tm
+(- `GET /incomes`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 493.89 Tm
+(- `POST /incomes`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 479.89 Tm
+(- `PUT /incomes/:id`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 465.89 Tm
+(- `DELETE /incomes/:id`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 443.89 Tm
+(#### Presupuestos) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 421.89 Tm
+(Endpoints detectados:) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 399.89 Tm
+(- `GET /budgets`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 385.89 Tm
+(- `POST /budgets`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 371.89 Tm
+(- `PUT /budgets/:id`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 357.89 Tm
+(- `DELETE /budgets/:id`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 335.89 Tm
+(#### Deducciones) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 313.89 Tm
+(Endpoints detectados:) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 291.89 Tm
+(- `GET /deductions`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 277.89 Tm
+(- `POST /deductions`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 263.89 Tm
+(- `PUT /deductions/:id`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 249.89 Tm
+(- `DELETE /deductions/:id`) Tj
+ET
+BT
+/F2 12 Tf
+1 0 0 1 54.00 221.89 Tm
+(4. Dashboard consolidado) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 195.89 Tm
+(Endpoint detectado:) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 173.89 Tm
+(- `GET /dashboard`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 151.89 Tm
+(DashboardService consulta en paralelo las tablas family_members, incomes, deductions,) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 137.89 Tm
+(budgets y expenses usando Promise.all, devolviendo un payload unico para la carga inicial) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 123.89 Tm
+(del frontend.) Tj
+ET
+BT
+/F2 12 Tf
+1 0 0 1 54.00 95.89 Tm
+(5. Funcionalidades con IA) Tj
+ET
+BT
+/F1 9 Tf
+1 0 0 1 471.28 40 Tm
+(Pagina 3 de 5) Tj
+ET
+endstream
+endobj
+10 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 9 0 R >>
+endobj
+11 0 obj
+<< /Length 3747 >>
+stream
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 783.89 Tm
+(#### Procesamiento de cartolas) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 761.89 Tm
+(Endpoint detectado:) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 739.89 Tm
+(- `POST /ai/process-statement`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 717.89 Tm
+(Flujo identificado:) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 695.89 Tm
+(- Verifica que el usuario sea premium.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 681.89 Tm
+(- Obtiene `couple_id` y el `family_member` asociado.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 667.89 Tm
+(- Consulta categorias desde la base.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 653.89 Tm
+(- Envia una imagen o PDF a Gemini para extraer gastos en JSON.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 639.89 Tm
+(- Inserta el resultado como lote en la tabla `expenses`.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 617.89 Tm
+(Esta funcionalidad permite acelerar el ingreso de gastos desde documentos bancarios.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 595.89 Tm
+(#### Chatbot financiero) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 573.89 Tm
+(Endpoint detectado:) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 551.89 Tm
+(- `POST /chatbot/chat`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 529.89 Tm
+(El chatbot utiliza Gemini con declaraciones de funciones para consultar o modificar datos) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 515.89 Tm
+(bajo demanda. Las herramientas definidas actualmente permiten:) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 493.89 Tm
+(- obtener gastos mensuales,) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 479.89 Tm
+(- obtener ingresos mensuales,) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 465.89 Tm
+(- actualizar la categoria de un gasto.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 443.89 Tm
+(El enfoque reduce la necesidad de cargar toda la informacion financiera en el prompt) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 429.89 Tm
+(inicial y delega consultas puntuales a servicios internos.) Tj
+ET
+BT
+/F2 15 Tf
+1 0 0 1 54.00 397.89 Tm
+(Documentacion y experiencia de desarrollo) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 365.89 Tm
+(- Swagger se expone en `/api`.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 351.89 Tm
+(- Scripts npm disponibles: `build`, `start`, `start:dev`, `start:prod`, `lint`, `test`,) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 72.00 337.89 Tm
+(`test:cov`, `test:e2e`.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 323.89 Tm
+(- Existen pruebas unitarias visibles principalmente en el modulo de `expenses` y en el) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 72.00 309.89 Tm
+(controlador principal.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 295.89 Tm
+(- El `README.md` actual sigue siendo el template por defecto de NestJS, por lo que no) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 72.00 281.89 Tm
+(documenta todavia el dominio de negocio real del proyecto.) Tj
+ET
+BT
+/F2 15 Tf
+1 0 0 1 54.00 249.89 Tm
+(Hallazgos relevantes) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 217.89 Tm
+(- El proyecto ya refleja gran parte del plan definido en `implementation_plan.md`.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 203.89 Tm
+(- La API esta pensada como fachada completa sobre Supabase para que el frontend no) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 72.00 189.89 Tm
+(interactue directamente con la base.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 175.89 Tm
+(- El dominio del sistema esta claramente orientado a finanzas compartidas: pareja,) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 72.00 161.89 Tm
+(miembros del hogar, prorrateo y control de presupuesto.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 147.89 Tm
+(- Hay una combinacion de capacidades transaccionales clasicas y funciones premium) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 72.00 133.89 Tm
+(apoyadas por IA.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 119.89 Tm
+(- `.env.example` no documenta `GEMINI_API_KEY`, aunque el codigo si la exige para) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 72.00 105.89 Tm
+(`AIModule` y `ChatbotModule`.) Tj
+ET
+BT
+/F1 9 Tf
+1 0 0 1 471.28 40 Tm
+(Pagina 4 de 5) Tj
+ET
+endstream
+endobj
+12 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 11 0 R >>
+endobj
+13 0 obj
+<< /Length 1571 >>
+stream
+BT
+/F2 15 Tf
+1 0 0 1 54.00 773.89 Tm
+(Posibles mejoras) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 741.89 Tm
+(- Reemplazar el `README.md` generico por documentacion especifica del proyecto.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 727.89 Tm
+(- Centralizar la logica repetida para obtener `couple_id`, ya que aparece en varios) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 72.00 713.89 Tm
+(controladores.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 699.89 Tm
+(- Documentar mejor el modelo de datos esperado en Supabase y las tablas involucradas.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 685.89 Tm
+(- Ampliar la cobertura de pruebas en modulos fuera de `expenses`.) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 671.89 Tm
+(- Agregar ejemplos de peticiones y respuestas para facilitar integracion con frontend o) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 72.00 657.89 Tm
+(terceros.) Tj
+ET
+BT
+/F2 15 Tf
+1 0 0 1 54.00 625.89 Tm
+(Conclusion) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 593.89 Tm
+(Presupuestados Back es un backend modular y bien encaminado para una aplicacion de) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 579.89 Tm
+(finanzas compartidas. Combina operaciones CRUD tradicionales, agregacion de informacion) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 565.89 Tm
+(para dashboard y automatizaciones con IA sobre una base de datos en Supabase. El proyecto) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 551.89 Tm
+(ya tiene una base funcional solida, aunque todavia le vendria bien fortalecer su) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 537.89 Tm
+(documentacion tecnica y estandarizar algunos patrones internos.) Tj
+ET
+BT
+/F1 9 Tf
+1 0 0 1 471.28 40 Tm
+(Pagina 5 de 5) Tj
+ET
+endstream
+endobj
+14 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 13 0 R >>
+endobj
+xref
+0 15
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000142 00000 n 
+0000000212 00000 n 
+0000000287 00000 n 
+0000004205 00000 n 
+0000004347 00000 n 
+0000007683 00000 n 
+0000007825 00000 n 
+0000010790 00000 n 
+0000010933 00000 n 
+0000014733 00000 n 
+0000014877 00000 n 
+0000016501 00000 n 
+trailer
+<< /Size 15 /Root 1 0 R >>
+startxref
+16645
+%%EOF

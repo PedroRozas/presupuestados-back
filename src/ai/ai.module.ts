@@ -1,10 +1,8 @@
-import { Module } from '@nestjs/common';
-import { AIService } from './ai.service';
-import { AIController } from './ai.controller';
-import { SupabaseModule } from '../supabase/supabase.module';
+import { Module } from '@nestjs/common'
+import { AIService } from './ai.service.js'
+import { AIController } from './ai.controller.js'
 
 @Module({
-  imports: [SupabaseModule],
   controllers: [AIController],
   providers: [AIService],
 })

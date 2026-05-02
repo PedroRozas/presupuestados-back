@@ -66,13 +66,17 @@ export class ExpensesController {
   async updateExpense(
     @Param('id') id: string,
     @Body() updateExpenseDto: UpdateExpenseDto,
+    @Req() req: Request & { user: AuthenticatedUser },
   ) {
-    // Injecting ID to the DTO for consistency with the service method
     updateExpenseDto.p_expense_id = id;
-    // Only updates existing, ownerId/coupleId not required strictly if we just trust the id,
-    // or we can add Row Level Security / validation. Since RLS is bypassed by service role if using that,
-    // we should ideally validate ownership. But for now matching the implementation_plan mapping.
-    return this.expensesService.updateExpense(updateExpenseDto);
+    const coupleId = await this.coupleContextService.getCoupleIdOrThrow(
+      req.user.id,
+      {
+        profileError: 'Error fetching user profile',
+        missingCoupleError: 'User is not part of a couple',
+      },
+    );
+    return this.expensesService.updateExpense(coupleId, updateExpenseDto);
   }
 
   @Put('recurring/:id')
@@ -84,7 +88,15 @@ export class ExpensesController {
     // Inject ID into DTO
     updateRecurringDto.p_old_expense_id = id;
     const ownerId = req.user.id;
+    const coupleId = await this.coupleContextService.getCoupleIdOrThrow(
+      ownerId,
+      {
+        profileError: 'Error fetching user profile',
+        missingCoupleError: 'User is not part of a couple',
+      },
+    );
     return this.expensesService.updateRecurringExpense(
+      coupleId,
       ownerId,
       updateRecurringDto,
     );

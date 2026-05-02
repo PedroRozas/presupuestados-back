@@ -1,15 +1,19 @@
 import {
+  ForbiddenException,
+  Inject,
   Injectable,
   InternalServerErrorException,
-  ForbiddenException,
+  Logger,
   BadRequestException,
 } from '@nestjs/common';
-import { SupabaseService } from '../supabase/supabase.service';
-import { ProcessStatementDto } from './dto/process-statement.dto';
-import { GoogleGenAI } from '@google/genai';
-import { randomUUID } from 'crypto';
+import { NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { eq } from 'drizzle-orm';
 import { ConfigService } from '@nestjs/config';
-import { Database } from '../supabase/database.types';
+import OpenAI from 'openai';
+import { DRIZZLE } from '../database/database.module.js';
+import * as schema from '../database/schema/index.js';
+import { profiles, expenseCategories } from '../database/schema/index.js';
+import { ProcessStatementDto } from './dto/process-statement.dto.js';
 
 export interface UploadedFile {
   mimetype: string;
@@ -18,21 +22,35 @@ export interface UploadedFile {
   size?: number;
 }
 
-type ExpenseInsert = Database['public']['Tables']['expenses']['Insert'];
+interface ExtractedStatementExpense {
+  date: string;
+  description: string;
+  amount: number;
+  category_id: number;
+  category_name: string;
+}
+
+interface ExtractedStatementResponse {
+  expenses: ExtractedStatementExpense[];
+}
 
 @Injectable()
 export class AIService {
-  private ai: GoogleGenAI;
+  private readonly logger = new Logger(AIService.name);
+  private readonly openai: OpenAI;
+  private readonly model: string;
 
   constructor(
-    private readonly supabaseService: SupabaseService,
+    @Inject(DRIZZLE) private readonly db: NodePgDatabase<typeof schema>,
     private readonly configService: ConfigService,
   ) {
-    const apiKey = this.configService.get<string>('GEMINI_API_KEY');
+    const apiKey = this.configService.get<string>('OPENAI_API_KEY');
     if (!apiKey) {
-      throw new InternalServerErrorException('GEMINI_API_KEY no configurada');
+      throw new InternalServerErrorException('OPENAI_API_KEY no configurada');
     }
-    this.ai = new GoogleGenAI({ apiKey });
+
+    this.openai = new OpenAI({ apiKey });
+    this.model = this.configService.get<string>('OPENAI_MODEL') ?? 'gpt-5.5';
   }
 
   async processStatement(
@@ -40,159 +58,267 @@ export class AIService {
     file: UploadedFile,
     dto: ProcessStatementDto,
   ) {
-    const supabase = this.supabaseService.getClient();
+    // 1. Verificación Premium. Esta función no requiere pareja: solo previsualiza gastos.
+    const profileResult = await this.db
+      .select({
+        isPremium: profiles.isPremium,
+      })
+      .from(profiles)
+      .where(eq(profiles.id, userId))
+      .limit(1);
 
-    // 1. Verificación Premium y Obtener Couple/Member Info
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('is_premium, couple_id, default_split_method')
-      .eq('id', userId)
-      .single();
+    const profile = profileResult[0];
 
-    if (profileError || !profile) {
+    if (!profile) {
       throw new InternalServerErrorException(
         'Error al obtener perfil del usuario',
       );
     }
-    if (!profile.is_premium) {
+    if (!profile.isPremium) {
       throw new ForbiddenException('Esta función requiere suscripción premium');
     }
 
-    const coupleId = profile.couple_id;
-    if (!coupleId) {
-      throw new BadRequestException('El usuario no pertenece a una pareja');
-    }
+    // 2. Obtener las categorías de la BD
+    const categories = await this.db.select().from(expenseCategories);
+    const categoryNamesById = new Map(categories.map((c) => [c.id, c.name]));
+    const fallbackCategoryId =
+      categories.find((c) => /varios|otros|general/i.test(c.name))?.id ?? 0;
+    const categoriesContext =
+      categories.length > 0
+        ? categories.map((c) => `${c.id}: ${c.name}`).join(', ')
+        : `${fallbackCategoryId}: Varios`;
 
-    // Identificar el ID del family_member actual para fallback
-    const { data: familyMember, error: memberError } = await supabase
-      .from('family_members')
-      .select('id')
-      .eq('linked_user_id', userId)
-      .eq('couple_id', coupleId)
-      .single();
+    // 3. Preparar archivo y prompt para LLM
+    const base64Data = file.buffer.toString('base64');
+    const targetDate = this.getTargetDate(dto);
+    const fileContent = this.buildFileContent(file, base64Data);
+    const promptText = this.buildStatementPrompt(targetDate, categoriesContext);
 
-    if (memberError || !familyMember) {
+    let responseText: string;
+    try {
+      const response = await this.openai.responses.create({
+        model: this.model,
+        instructions: this.buildSystemPrompt(),
+        input: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'input_text',
+                text: promptText,
+              },
+              fileContent,
+            ],
+          },
+        ],
+        max_output_tokens: 6000,
+        store: false,
+        text: {
+          format: {
+            type: 'json_schema',
+            name: 'statement_expense_extraction',
+            strict: true,
+            schema: {
+              type: 'object',
+              additionalProperties: false,
+              properties: {
+                expenses: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    additionalProperties: false,
+                    properties: {
+                      date: {
+                        type: 'string',
+                        description: 'Fecha del gasto en formato YYYY-MM-DD',
+                      },
+                      description: {
+                        type: 'string',
+                        description:
+                          'Comercio limpio. Incluye cuota X/Y si aplica.',
+                      },
+                      amount: {
+                        type: 'number',
+                        description:
+                          'Monto final del cargo, positivo, sin separadores.',
+                      },
+                      category_id: {
+                        type: 'integer',
+                        description:
+                          'ID exacto de una categoría del catálogo o 0.',
+                      },
+                      category_name: {
+                        type: 'string',
+                        description:
+                          'Nombre de la categoría elegida del catálogo.',
+                      },
+                    },
+                    required: [
+                      'date',
+                      'description',
+                      'amount',
+                      'category_id',
+                      'category_name',
+                    ],
+                  },
+                },
+              },
+              required: ['expenses'],
+            },
+          },
+        },
+      });
+
+      responseText = response.output_text;
+    } catch (e: unknown) {
+      const errorMessage = e instanceof Error ? e.message : String(e);
       throw new InternalServerErrorException(
-        'Miembro familiar no encontrado para el usuario actual',
+        `Error contactando OpenAI: ${errorMessage}`,
       );
     }
-    const defaultMemberId = familyMember.id;
-    const paidBy = dto.paid_by || defaultMemberId;
-    const assignedUserId = dto.assigned_user_id || defaultMemberId;
 
-    // 2. Obtener las categorías de la BD
-    const { data } = await supabase.rpc('get_categories_rpc');
-    const categories = data as { id: number; name: string }[] | null;
-    const categoriesContext = categories
-      ? categories.map((c) => `${c.id}: ${c.name}`).join(', ')
-      : 'Varios';
-
-    // 3. Preparar imagen y prompt para LLM
-    const base64Data = file.buffer.toString('base64');
-    const today = new Date().toISOString().split('T')[0];
-
-    const promptText = `
-Actúa como experto contable. Analiza la imagen o documento PDF, que es un estado de cuenta bancario.
-La fecha objetivo para estos gastos es: ${today}.
-
-Extrae GASTOS (ignora abonos, sueldos y transferencias recibidas).
-
-Monto: TOTAL FINAL del gasto (con propina si aplica). Entero sin puntos.
-Fecha: Usa esta fecha: ${today} en YYYY-MM-DD. Si puedes extraer la fecha de la propia fila, hazlo.
-Descripción: Nombre del comercio de forma clara y limpia (ej: "Jumbo", "Uber") solo la primera letra mayúscula, agregando la fecha original de la compra YYYY-MM-DD al final si la encuentras.
-Categoría ID: Clasifica el gasto utilizando SOLAMENTE una de las siguientes categorías enviadas en este catálogo:
-${categoriesContext}
-Anota solamente el ID (entero) de la categoría que mejor corresponda. Si ninguna encaja bien, asígnale el ID de "Varios" u otro general.
-
-OUTPUT JSON EXACTO DEBE TENER LA SIGUIENTE ESTRUCTURA Y NADA MÁS:
-{ "expenses": [{ "date": "YYYY-MM-DD", "description": "X (YYYY-MM-DD)", "amount": 0, "category_id": 0 }] }
-    `;
-
-    // 4. Llamar a Gemini
-    const response = await this.ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            { text: promptText },
-            {
-              inlineData: {
-                mimeType: file.mimetype,
-                data: base64Data,
-              },
-            },
-          ],
-        },
-      ],
-      config: {
-        responseMimeType: 'application/json',
-      },
-    });
-
-    const resultText = response.text || '';
-    let parsedData: {
-      expenses: {
-        date: string;
-        description: string;
-        amount: number;
-        category_id: number;
-      }[];
-    };
-
+    let parsedData: ExtractedStatementResponse;
     try {
-      if (!resultText) throw new Error('La IA devolvió una respuesta vacía');
-      const cleanJson = resultText.replace(/```json|```/g, '').trim();
-      parsedData = JSON.parse(cleanJson) as { expenses: any[] };
+      if (!responseText) throw new Error('La IA devolvió una respuesta vacía');
+      parsedData = JSON.parse(responseText) as ExtractedStatementResponse;
     } catch {
-      console.error('Error parseando JSON de Gemini:', resultText);
+      this.logger.error(`Error parseando JSON de OpenAI: ${responseText}`);
       throw new InternalServerErrorException(
         'Error procesando el resultado de la IA',
       );
     }
 
-    if (!parsedData.expenses || parsedData.expenses.length === 0) {
+    const normalizedExpenses = this.normalizeExpenses(
+      parsedData,
+      categoryNamesById,
+      fallbackCategoryId,
+      targetDate,
+    );
+
+    if (normalizedExpenses.length === 0) {
       return { msg: 'No se extrajeron gastos', expenses: [] };
     }
 
-    // 5. Insertar en Lote
-    const batchId = randomUUID();
-    const batchName = dto.batch_name || `Importación automatizada ${today}`;
+    return {
+      expenses: normalizedExpenses,
+    };
+  }
 
-    const expensesToInsert: ExpenseInsert[] = parsedData.expenses.map(
-      (exp) => ({
-        amount: exp.amount,
-        description: exp.description,
-        date: new Date(exp.date).toISOString(),
-        category_id: exp.category_id,
-        is_recurring: false,
-        is_credit: false,
-        batch_id: batchId,
-        batch_name: batchName,
-        paid_by: paidBy,
-        assigned_user_id: assignedUserId,
-        couple_id: coupleId,
-        owner_id: userId,
-        split_method: profile.default_split_method || 'equal',
-      }),
-    );
+  private buildSystemPrompt() {
+    return `Eres un extractor financiero para Presupuestados.
+Tu única tarea es convertir estados de cuenta, cartolas, boletas o capturas bancarias en gastos revisables por el usuario.
+Debes ser conservador: si una línea parece pago, abono, reversa, ajuste, devolución, transferencia recibida, saldo, impuesto informativo o movimiento que no sea una compra/cargo de consumo, no la devuelvas.
+Devuelve solo compras, cargos, comisiones o suscripciones que el usuario tendría sentido registrar como gasto.
+Si detectas una compra en cuotas, conserva esa información en el nombre del gasto como "Comercio cuota X/Y".`;
+  }
 
-    const { data: insertedExpenses, error: insertError } = await supabase
-      .from('expenses')
-      .insert(expensesToInsert)
-      .select();
+  private buildStatementPrompt(targetDate: string, categoriesContext: string) {
+    return `Analiza el archivo adjunto y extrae gastos.
 
-    if (insertError) {
-      throw new InternalServerErrorException(
-        `Error al insertar lote de gastos: ${insertError.message}`,
-      );
+Fecha de respaldo: ${targetDate}. Usa la fecha de la fila si es clara; si no existe o es ambigua, usa la fecha de respaldo.
+
+Reglas de extracción:
+- Devuelve solo cargos reales de consumo. Ignora siempre pagos, pagos de tarjeta, pagos de cuenta, abonos, sueldos, transferencias recibidas, devoluciones, reversas, anulaciones, saldos anteriores, intereses informativos y totales/resúmenes.
+- Si una línea dice "Pago", "Pago tarjeta", "Pago recibido", "Abono", "Transferencia recibida", "Reversa" o "Devolución", no la incluyas aunque tenga monto.
+- No incluyas subtotal, total facturado, total nacional, total internacional ni resumen de cuotas.
+- El monto debe ser el cargo final positivo de esa fila, sin separadores de miles. En CLP, usa enteros.
+- Limpia el comercio: usa un nombre corto y entendible, por ejemplo "Jumbo", "Uber", "Netflix".
+- Si detectas cuotas, incluye la cuota en la descripción: "Comercio cuota 3/12". Reconoce formatos como "03/12", "3 de 12", "cuota 03", "C03/12", "N cuotas" o similares.
+- Si hay fecha original de compra distinta a la fecha de facturación, agrega la fecha original al final: "Comercio cuota 3/12 (YYYY-MM-DD)".
+- Clasifica cada gasto usando solo este catálogo de categorías:
+${categoriesContext}
+- category_id debe ser el ID exacto del catálogo. Si ninguna categoría encaja bien, usa 0 o la categoría general/Varios del catálogo.
+- category_name debe coincidir con el nombre de la categoría elegida.`;
+  }
+
+  private buildFileContent(file: UploadedFile, base64Data: string) {
+    if (file.mimetype === 'application/pdf') {
+      return {
+        type: 'input_file' as const,
+        filename: file.originalname ?? 'estado-de-cuenta.pdf',
+        file_data: `data:${file.mimetype};base64,${base64Data}`,
+        detail: 'high' as const,
+      };
     }
 
-    return {
-      batch_id: batchId,
-      batch_name: batchName,
-      count: insertedExpenses.length,
-      extracted: insertedExpenses,
-    };
+    if (file.mimetype.startsWith('image/')) {
+      return {
+        type: 'input_image' as const,
+        image_url: `data:${file.mimetype};base64,${base64Data}`,
+        detail: 'high' as const,
+      };
+    }
+
+    throw new BadRequestException(
+      'Tipo de archivo no permitido. Solo se aceptan PDF, PNG, JPEG y WEBP',
+    );
+  }
+
+  private getTargetDate(dto: ProcessStatementDto) {
+    if (dto.target_date && /^\d{4}-\d{2}-\d{2}$/.test(dto.target_date)) {
+      return dto.target_date;
+    }
+
+    return new Date().toISOString().split('T')[0];
+  }
+
+  private normalizeExpenses(
+    parsedData: ExtractedStatementResponse,
+    categoryNamesById: Map<number, string>,
+    fallbackCategoryId: number,
+    targetDate: string,
+  ) {
+    if (!Array.isArray(parsedData.expenses)) return [];
+
+    return parsedData.expenses
+      .filter((expense) => {
+        const amount = Number(expense.amount);
+        return (
+          Number.isFinite(amount) &&
+          amount > 0 &&
+          typeof expense.description === 'string' &&
+          expense.description.trim().length > 0 &&
+          !this.isPaymentLikeDescription(expense.description)
+        );
+      })
+      .map((expense) => {
+        const categoryId = categoryNamesById.has(expense.category_id)
+          ? expense.category_id
+          : fallbackCategoryId;
+        const category = categoryNamesById.get(categoryId) ?? 'Varios';
+
+        return {
+          date: this.normalizeDate(expense.date, targetDate),
+          description: expense.description.replace(/\s+/g, ' ').trim(),
+          amount: Math.round(Number(expense.amount)),
+          category,
+          categoryId,
+        };
+      });
+  }
+
+  private normalizeDate(date: string, fallbackDate: string) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return date;
+    }
+
+    return fallbackDate;
+  }
+
+  private isPaymentLikeDescription(description: string) {
+    const normalized = description
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase();
+
+    return [
+      /\babono\b/,
+      /\bdevolucion\b/,
+      /\breversa\b/,
+      /\banulacion\b/,
+      /\btransferencia recibida\b/,
+      /\bpago recibido\b/,
+      /\bpago\s+(de\s+)?(tarjeta|tc|credito|cuenta|prestamo|linea de credito)\b/,
+    ].some((pattern) => pattern.test(normalized));
   }
 }

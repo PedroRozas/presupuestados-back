@@ -1,4 +1,4 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsOptional, IsString } from 'class-validator';
 
 export class UpdateProfileDto {
   @IsOptional()
@@ -16,4 +16,8 @@ export class UpdateProfileDto {
   @IsOptional()
   @IsString()
   default_split_method?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  has_seen_onboarding?: boolean;
 }

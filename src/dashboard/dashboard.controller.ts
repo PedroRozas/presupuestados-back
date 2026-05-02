@@ -1,8 +1,9 @@
-import { Controller, Get, Req, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, Req, UseGuards } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthGuard, AuthenticatedUser } from '../common/guards/auth.guard.js';
 import { DashboardService } from './dashboard.service.js';
 import { CoupleContextService } from '../common/services/couple-context.service.js';
+import { MonthYearQueryDto } from '../common/dto/month-year-query.dto.js';
 
 @Controller('dashboard')
 @UseGuards(AuthGuard)
@@ -13,10 +14,44 @@ export class DashboardController {
   ) {}
 
   @Get()
-  async getDashboard(@Req() req: Request & { user: AuthenticatedUser }) {
+  async getDashboard(
+    @Req() req: Request & { user: AuthenticatedUser },
+    @Query() query: MonthYearQueryDto,
+  ) {
     const coupleId = await this.coupleContextService.getCoupleIdOrThrow(
       req.user.id,
     );
-    return this.dashboardService.getDashboardData(coupleId);
+    return this.dashboardService.getDashboardData(
+      coupleId,
+      query.month,
+      query.year,
+    );
+  }
+
+  @Get('bootstrap')
+  async getBootstrap(
+    @Req() req: Request & { user: AuthenticatedUser },
+    @Query() query: MonthYearQueryDto,
+  ) {
+    const coupleId = await this.coupleContextService.getCoupleIdOrThrow(
+      req.user.id,
+    );
+    return this.dashboardService.getBootstrapData(
+      req.user,
+      coupleId,
+      query.month,
+      query.year,
+    );
+  }
+
+  @Get('summary')
+  async getSummary(
+    @Req() req: Request & { user: AuthenticatedUser },
+    @Query() query: MonthYearQueryDto,
+  ) {
+    const coupleId = await this.coupleContextService.getCoupleIdOrThrow(
+      req.user.id,
+    );
+    return this.dashboardService.getSummary(coupleId, query.month, query.year);
   }
 }

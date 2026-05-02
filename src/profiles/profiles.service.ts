@@ -1,100 +1,89 @@
 import {
+  Inject,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
-} from '@nestjs/common';
-import { SupabaseService } from '../supabase/supabase.service.js';
-import { UpdateProfileDto } from './dto/update-profile.dto.js';
+} from '@nestjs/common'
+import { NodePgDatabase } from 'drizzle-orm/node-postgres'
+import { eq } from 'drizzle-orm'
+import { DRIZZLE } from '../database/database.module.js'
+import * as schema from '../database/schema/index.js'
+import { profiles, familyMembers } from '../database/schema/index.js'
+import { UpdateProfileDto } from './dto/update-profile.dto.js'
 
 @Injectable()
 export class ProfilesService {
-  constructor(private readonly supabaseService: SupabaseService) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: NodePgDatabase<typeof schema>,
+  ) {}
 
   /**
    * GET /profiles/me
    * Retorna el perfil actual, couple_id y los miembros de la familia.
    */
   async getMyProfile(userId: string) {
-    const supabase = this.supabaseService.getClient();
+    const result = await this.db
+      .select()
+      .from(profiles)
+      .where(eq(profiles.id, userId))
+      .limit(1)
 
-    // 1. Obtener perfil del usuario
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
+    const profile = result[0]
 
-    if (profileError || !profile) {
-      throw new NotFoundException('Perfil no encontrado');
+    if (!profile) {
+      throw new NotFoundException('Perfil no encontrado')
     }
 
-    // 2. Si tiene couple_id, obtener los miembros de la familia
-    let familyMembers: unknown[] = [];
-    if (profile.couple_id) {
-      const { data: members, error: membersError } = await supabase
-        .from('family_members')
-        .select('*')
-        .eq('couple_id', profile.couple_id);
+    let members: schema.FamilyMember[] = []
+    if (profile.coupleId) {
+      members = await this.db
+        .select()
+        .from(familyMembers)
+        .where(eq(familyMembers.coupleId, profile.coupleId))
 
-      if (membersError) {
-        throw new InternalServerErrorException(
-          `Error al obtener miembros: ${membersError.message}`,
-        );
+      if (!members) {
+        throw new InternalServerErrorException('Error al obtener miembros')
       }
-
-      familyMembers = members ?? [];
     }
 
     return {
       ...profile,
-      family_members: familyMembers,
-    };
+      family_members: members,
+    }
   }
 
   /**
    * PUT /profiles/me
-   * Actualiza nombre, método de división por defecto, avatar, teléfono.
+   * Actualiza nombre, método de división por defecto, avatar, teléfono y onboarding.
    * Sincroniza full_name en family_members si se actualiza.
-   * Traducción de update_user_profile_rpc.
    */
   async updateMyProfile(userId: string, dto: UpdateProfileDto) {
-    const supabase = this.supabaseService.getClient();
-
-    const updatePayload: Record<string, unknown> = {};
-    if (dto.full_name !== undefined) updatePayload['full_name'] = dto.full_name;
-    if (dto.avatar_url !== undefined)
-      updatePayload['avatar_url'] = dto.avatar_url;
-    if (dto.phone !== undefined) updatePayload['phone'] = dto.phone;
+    const updatePayload: Partial<schema.NewProfile> = {}
+    if (dto.full_name !== undefined) updatePayload.fullName = dto.full_name
+    if (dto.avatar_url !== undefined) updatePayload.avatarUrl = dto.avatar_url
+    if (dto.phone !== undefined) updatePayload.phone = dto.phone
     if (dto.default_split_method !== undefined)
-      updatePayload['default_split_method'] = dto.default_split_method;
+      updatePayload.defaultSplitMethod = dto.default_split_method
+    if (dto.has_seen_onboarding !== undefined)
+      updatePayload.hasSeenOnboarding = dto.has_seen_onboarding
 
-    const { data, error } = await supabase
-      .from('profiles')
-      .update(updatePayload)
-      .eq('id', userId)
-      .select()
-      .single();
+    const updated = await this.db
+      .update(profiles)
+      .set(updatePayload)
+      .where(eq(profiles.id, userId))
+      .returning()
 
-    if (error) {
-      throw new InternalServerErrorException(
-        `Error al actualizar perfil: ${error.message}`,
-      );
+    if (!updated[0]) {
+      throw new InternalServerErrorException('Error al actualizar perfil')
     }
 
-    // Sincronizar full_name en family_members (equivalente al RPC)
     if (dto.full_name !== undefined) {
-      const { error: memberError } = await supabase
-        .from('family_members')
-        .update({ name: dto.full_name })
-        .eq('linked_user_id', userId);
-
-      if (memberError) {
-        throw new InternalServerErrorException(
-          `Error al sincronizar nombre en family_members: ${memberError.message}`,
-        );
-      }
+      await this.db
+        .update(familyMembers)
+        .set({ name: dto.full_name })
+        .where(eq(familyMembers.linkedUserId, userId))
     }
 
-    return data;
+    return updated[0]
   }
 }

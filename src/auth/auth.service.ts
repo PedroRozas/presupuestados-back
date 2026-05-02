@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -10,12 +11,27 @@ import { InitializeUserDto } from './dto/initialize-user.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { RefreshDto } from './dto/refresh.dto.js';
+import { ForgotPasswordDto } from './dto/forgot-password.dto.js';
+import { UpdatePasswordDto } from './dto/update-password.dto.js';
 
 export interface AuthSession {
   access_token: string;
   refresh_token: string;
   expires_in: number;
   token_type: string;
+  user: {
+    id: string;
+    email: string;
+    user_metadata?: {
+      name?: string;
+      full_name?: string;
+    };
+  };
+}
+
+export interface RegisterResponse {
+  message: string;
+  emailConfirmationRequired: true;
   user: {
     id: string;
     email: string;
@@ -35,28 +51,35 @@ export class AuthService {
   // POST /auth/register
   // Crea un nuevo usuario en Supabase Auth.
   // ─────────────────────────────────────────────────────────────────────────
-  async register(dto: RegisterDto): Promise<AuthSession> {
+  async register(dto: RegisterDto): Promise<RegisterResponse> {
     this.logger.log(`Registrando nuevo usuario: ${dto.email}`);
-    const supabase = this.supabaseService.getClient();
+    const authClient = this.supabaseService.createAuthClient();
 
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error } = await authClient.auth.signUp({
       email: dto.email,
       password: dto.password,
+      options: {
+        data: {
+          full_name: dto.full_name,
+          invite_code: dto.invite_code?.trim().toUpperCase() || null,
+        },
+      },
     });
 
-    if (error || !data.session || !data.user) {
+    if (error || !data.user) {
       this.logger.error(`Error en registro: ${error?.message}`);
       throw new InternalServerErrorException(
         error?.message ?? 'Error al registrar el usuario',
       );
     }
 
-    this.logger.log(`Usuario registrado: ${data.user.id}`);
+    this.logger.log(
+      `Usuario registrado, pendiente de confirmación: ${data.user.id}`,
+    );
     return {
-      access_token: data.session.access_token,
-      refresh_token: data.session.refresh_token,
-      expires_in: data.session.expires_in,
-      token_type: data.session.token_type,
+      message:
+        'Revisa tu correo para confirmar tu cuenta antes de iniciar sesión.',
+      emailConfirmationRequired: true,
       user: {
         id: data.user.id,
         email: data.user.email ?? dto.email,
@@ -71,7 +94,7 @@ export class AuthService {
   // ─────────────────────────────────────────────────────────────────────────
   async login(dto: LoginDto): Promise<AuthSession> {
     this.logger.log(`Intento de login para: ${dto.email}`);
-    const supabase = this.supabaseService.getClient();
+    const supabase = this.supabaseService.createAuthClient();
 
     const { data, error } = await supabase.auth.signInWithPassword({
       email: dto.email,
@@ -80,10 +103,31 @@ export class AuthService {
 
     if (error || !data.session || !data.user) {
       this.logger.warn(`Login fallido para ${dto.email}: ${error?.message}`);
+      if (error?.message.toLowerCase().includes('email not confirmed')) {
+        throw new UnauthorizedException(
+          'Debes confirmar tu correo antes de iniciar sesión.',
+        );
+      }
+
       throw new UnauthorizedException(
         'Credenciales inválidas. Verifica tu email y contraseña.',
       );
     }
+
+    if (!data.user.email_confirmed_at) {
+      this.logger.warn(
+        `Login bloqueado para ${dto.email}: email no confirmado`,
+      );
+      throw new UnauthorizedException(
+        'Debes confirmar tu correo antes de iniciar sesión.',
+      );
+    }
+
+    await this.initializeUserDataFromMetadata(data.user.id, {
+      email: data.user.email ?? dto.email,
+      fullName: data.user.user_metadata?.['full_name'],
+      inviteCode: data.user.user_metadata?.['invite_code'],
+    });
 
     this.logger.log(`Login exitoso: ${data.user.id}`);
     return {
@@ -104,7 +148,7 @@ export class AuthService {
   // ─────────────────────────────────────────────────────────────────────────
   async refresh(dto: RefreshDto): Promise<AuthSession> {
     this.logger.log('Refrescando sesión...');
-    const supabase = this.supabaseService.getClient();
+    const supabase = this.supabaseService.createAuthClient();
 
     const { data, error } = await supabase.auth.refreshSession({
       refresh_token: dto.refresh_token,
@@ -126,8 +170,38 @@ export class AuthService {
       user: {
         id: data.user.id,
         email: data.user.email ?? '',
+        user_metadata: {
+          ...(typeof data.user.user_metadata?.['name'] === 'string'
+            ? { name: data.user.user_metadata['name'] }
+            : {}),
+          ...(typeof data.user.user_metadata?.['full_name'] === 'string'
+            ? { full_name: data.user.user_metadata['full_name'] }
+            : {}),
+        },
       },
     };
+  }
+
+  private async initializeUserDataFromMetadata(
+    userId: string,
+    metadata: {
+      email: string;
+      fullName?: unknown;
+      inviteCode?: unknown;
+    },
+  ): Promise<void> {
+    if (typeof metadata.fullName !== 'string' || !metadata.fullName.trim()) {
+      return;
+    }
+
+    await this.initializeUserData(userId, {
+      p_email: metadata.email,
+      p_full_name: metadata.fullName.trim(),
+      p_invite_code:
+        typeof metadata.inviteCode === 'string' && metadata.inviteCode.trim()
+          ? metadata.inviteCode.trim().toUpperCase()
+          : undefined,
+    });
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -165,14 +239,30 @@ export class AuthService {
 
     this.logger.log(`Inicializando datos para usuario: ${userId}`);
 
-    // Paso 2.1 — Actualizar la tabla profiles con email y full_name
-    const { error: profileError } = await supabase
+    // Guarda de idempotencia: si ya tiene pareja, no reinicializar
+    const { data: existingProfile } = await supabase
       .from('profiles')
-      .update({
-        email: dto.p_email,
-        full_name: dto.p_full_name,
-      })
-      .eq('owner_id', userId);
+      .select('couple_id')
+      .eq('id', userId)
+      .single();
+
+    if (existingProfile?.couple_id) {
+      this.logger.log(
+        `Usuario ${userId} ya inicializado. coupleId: ${existingProfile.couple_id}`,
+      );
+      return {
+        message: 'Usuario ya inicializado',
+        coupleId: existingProfile.couple_id,
+      };
+    }
+
+    // Paso 2.1 — Crear/actualizar la tabla profiles con email y full_name.
+    // En algunos entornos la fila no se crea por trigger al registrar auth.users.
+    const { error: profileError } = await supabase.from('profiles').upsert({
+      id: userId,
+      email: dto.p_email,
+      full_name: dto.p_full_name,
+    });
 
     if (profileError) {
       this.logger.error(
@@ -193,7 +283,7 @@ export class AuthService {
       const { data: updatedProfile } = await supabase
         .from('profiles')
         .select('couple_id')
-        .eq('owner_id', userId)
+        .eq('id', userId)
         .single();
 
       return {
@@ -252,7 +342,7 @@ export class AuthService {
     const { error: assignCoupleError } = await supabase
       .from('profiles')
       .update({ couple_id: newCoupleId })
-      .eq('owner_id', userId);
+      .eq('id', userId);
 
     if (assignCoupleError) {
       this.logger.error(
@@ -306,5 +396,72 @@ export class AuthService {
       message: 'Usuario inicializado y pareja creada',
       coupleId: newCoupleId,
     };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // POST /auth/forgot-password
+  // Envía el email de recuperación de contraseña via Supabase Auth.
+  // Siempre responde con éxito para no revelar si el email existe.
+  // ─────────────────────────────────────────────────────────────────────────
+  async forgotPassword(dto: ForgotPasswordDto): Promise<{ message: string }> {
+    this.logger.log(`Solicitud de recuperación para: ${dto.email}`);
+    const supabase = this.supabaseService.createAuthClient();
+
+    // Validar redirect_to contra la URL base del frontend configurada
+    if (dto.redirect_to) {
+      const allowedBase = process.env['FRONTEND_URL'];
+      if (!allowedBase) {
+        throw new BadRequestException(
+          'Configuración de redirect_to no disponible',
+        );
+      }
+      const allowed = new URL(allowedBase);
+      let requested: URL;
+      try {
+        requested = new URL(dto.redirect_to);
+      } catch {
+        throw new BadRequestException('redirect_to no es una URL válida');
+      }
+      if (requested.origin !== allowed.origin) {
+        throw new BadRequestException(
+          'redirect_to no está en el dominio permitido',
+        );
+      }
+    }
+
+    await supabase.auth.resetPasswordForEmail(dto.email, {
+      redirectTo: dto.redirect_to,
+    });
+
+    // No se propaga el error para no revelar si el email está registrado
+    return {
+      message: 'Si el email existe, recibirás un enlace de recuperación',
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // PUT /auth/update-password
+  // Actualiza la contraseña del usuario autenticado.
+  // Requiere el access_token de recuperación (extraído del hash de la URL
+  // de redirección del email) como Bearer token.
+  // ─────────────────────────────────────────────────────────────────────────
+  async updatePassword(
+    userId: string,
+    dto: UpdatePasswordDto,
+  ): Promise<{ message: string }> {
+    this.logger.log(`Actualizando contraseña para usuario: ${userId}`);
+    const supabase = this.supabaseService.getClient();
+
+    const { error } = await supabase.auth.admin.updateUserById(userId, {
+      password: dto.new_password,
+    });
+
+    if (error) {
+      this.logger.error(`Error actualizando contraseña: ${error.message}`);
+      throw new UnauthorizedException('No se pudo actualizar la contraseña');
+    }
+
+    this.logger.log(`Contraseña actualizada para usuario: ${userId}`);
+    return { message: 'Contraseña actualizada correctamente' };
   }
 }

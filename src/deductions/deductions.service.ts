@@ -1,136 +1,104 @@
 import {
+  Inject,
   Injectable,
   InternalServerErrorException,
   NotFoundException,
-} from '@nestjs/common';
-import { SupabaseService } from '../supabase/supabase.service.js';
-import { CreateDeductionDto } from './dto/create-deduction.dto.js';
-import { UpdateDeductionDto } from './dto/update-deduction.dto.js';
-import { randomUUID } from 'crypto';
+} from '@nestjs/common'
+import { NodePgDatabase } from 'drizzle-orm/node-postgres'
+import { eq, and, desc } from 'drizzle-orm'
+import { randomUUID } from 'crypto'
+import { DRIZZLE } from '../database/database.module.js'
+import * as schema from '../database/schema/index.js'
+import { deductions } from '../database/schema/index.js'
+import { CreateDeductionDto } from './dto/create-deduction.dto.js'
+import { UpdateDeductionDto } from './dto/update-deduction.dto.js'
 
 @Injectable()
 export class DeductionsService {
-  constructor(private readonly supabaseService: SupabaseService) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: NodePgDatabase<typeof schema>,
+  ) {}
 
   /**
    * GET /deductions
-   * Lista todas las deducciones de la pareja. Traducción de get_deductions_rpc.
+   * Lista todas las deducciones de la pareja.
    */
   async getDeductions(coupleId: string) {
-    const supabase = this.supabaseService.getClient();
-
-    const { data, error } = await supabase
-      .from('deductions')
-      .select('*')
-      .eq('couple_id', coupleId)
-      .order('date', { ascending: false });
-
-    if (error) {
-      throw new InternalServerErrorException(
-        `Error al obtener deducciones: ${error.message}`,
-      );
-    }
-
-    return data;
+    return this.db
+      .select()
+      .from(deductions)
+      .where(eq(deductions.coupleId, coupleId))
+      .orderBy(desc(deductions.date))
   }
 
   /**
    * POST /deductions
-   * Crea una nueva deducción para la pareja.
    */
   async createDeduction(
     coupleId: string,
     ownerId: string,
     dto: CreateDeductionDto,
   ) {
-    const supabase = this.supabaseService.getClient();
-
-    const { data, error } = await supabase
-
-      .from('deductions')
-      .insert({
+    const inserted = await this.db
+      .insert(deductions)
+      .values({
         id: dto.id ?? randomUUID(),
-        user_id: dto.user_id,
-        couple_id: coupleId,
-        amount: dto.amount,
+        userId: dto.user_id,
+        coupleId,
+        amount: String(dto.amount),
         description: dto.description ?? null,
-        date: dto.date,
-        owner_id: ownerId,
+        date: new Date(dto.date),
+        ownerId,
       })
-      .select()
-      .single();
+      .returning()
 
-    if (error) {
-      throw new InternalServerErrorException(
-        `Error al crear deducción: ${error.message}`,
-      );
+    if (!inserted[0]) {
+      throw new InternalServerErrorException('Error al crear deducción')
     }
 
-    return data;
+    return inserted[0]
   }
 
   /**
    * PUT /deductions/:id
-   * Actualiza una deducción existente. Valida pertenencia a la pareja.
    */
   async updateDeduction(coupleId: string, id: string, dto: UpdateDeductionDto) {
-    const supabase = this.supabaseService.getClient();
+    const updatePayload: Partial<schema.NewDeduction> = {}
+    if (dto.amount !== undefined) updatePayload.amount = String(dto.amount)
+    if (dto.description !== undefined) updatePayload.description = dto.description
+    if (dto.date !== undefined) updatePayload.date = new Date(dto.date)
+    if (dto.user_id !== undefined) updatePayload.userId = dto.user_id
 
-    const updatePayload: Record<string, unknown> = {};
-    if (dto.amount !== undefined) updatePayload['amount'] = dto.amount;
-    if (dto.description !== undefined)
-      updatePayload['description'] = dto.description;
-    if (dto.date !== undefined) updatePayload['date'] = dto.date;
-    if (dto.user_id !== undefined) updatePayload['user_id'] = dto.user_id;
+    const updated = await this.db
+      .update(deductions)
+      .set(updatePayload)
+      .where(and(eq(deductions.id, id), eq(deductions.coupleId, coupleId)))
+      .returning()
 
-    const { data, error } = await supabase
-      .from('deductions')
-      .update(updatePayload)
-      .eq('id', id)
-      .eq('couple_id', coupleId)
-      .select()
-      .single();
-
-    if (error) {
-      if (error.code === 'PGRST116') {
-        throw new NotFoundException(
-          'Deducción no encontrada o sin permiso para modificarla',
-        );
-      }
-      throw new InternalServerErrorException(
-        `Error al actualizar deducción: ${error.message}`,
-      );
+    if (!updated[0]) {
+      throw new NotFoundException(
+        'Deducción no encontrada o sin permiso para modificarla',
+      )
     }
 
-    return data;
+    return updated[0]
   }
 
   /**
    * DELETE /deductions/:id
-   * Elimina una deducción. Valida pertenencia a la pareja.
    */
   async deleteDeduction(coupleId: string, id: string) {
-    const supabase = this.supabaseService.getClient();
+    const deleted = await this.db
+      .delete(deductions)
+      .where(and(eq(deductions.id, id), eq(deductions.coupleId, coupleId)))
+      .returning()
 
-    const { data, error } = await supabase
-      .from('deductions')
-      .delete()
-      .eq('id', id)
-      .eq('couple_id', coupleId)
-      .select()
-      .single();
-
-    if (error) {
-      if (error.code === 'PGRST116') {
-        throw new NotFoundException(
-          'Deducción no encontrada o sin permiso para eliminarla',
-        );
-      }
-      throw new InternalServerErrorException(
-        `Error al eliminar deducción: ${error.message}`,
-      );
+    if (!deleted[0]) {
+      throw new NotFoundException(
+        'Deducción no encontrada o sin permiso para eliminarla',
+      )
     }
 
-    return { deleted: true, id: data?.id };
+    return { deleted: true, id: deleted[0].id }
   }
 }

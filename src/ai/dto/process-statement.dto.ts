@@ -6,6 +6,10 @@ export class ProcessStatementDto {
   batch_name?: string;
 
   @IsOptional()
+  @IsString()
+  target_date?: string;
+
+  @IsOptional()
   @IsUUID()
   paid_by?: string;
 

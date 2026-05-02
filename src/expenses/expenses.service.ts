@@ -1,39 +1,50 @@
 import {
+  Inject,
   Injectable,
   NotFoundException,
   InternalServerErrorException,
 } from '@nestjs/common';
-import { SupabaseService } from '../supabase/supabase.service';
-import { CreateExpenseDto } from './dto/create-expense.dto';
+import { NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { eq, and, inArray, desc, gte, lte } from 'drizzle-orm';
+import { DRIZZLE } from '../database/database.module.js';
+import * as schema from '../database/schema/index.js';
+import { expenses, incomes, deductions } from '../database/schema/index.js';
+import { CreateExpenseDto } from './dto/create-expense.dto.js';
 import { UpdateExpenseDto } from './dto/update-expense.dto.js';
 import { UpdateRecurringExpenseDto } from './dto/update-recurring-expense.dto.js';
 import { StopRecurringExpenseDto } from './dto/stop-recurring-expense.dto.js';
 import { DeleteExpensesBatchDto } from './dto/delete-expenses-batch.dto.js';
-import { Database } from '../supabase/database.types.js';
-
-type ExpenseInsert = Database['public']['Tables']['expenses']['Insert'];
+import {
+  getPreviousMonthEndDate,
+  normalizeRecurrenceInterval,
+} from '../common/utils/recurrence.js';
+import { CoupleContextService } from '../common/services/couple-context.service.js';
 
 @Injectable()
 export class ExpensesService {
-  constructor(private readonly supabaseService: SupabaseService) {}
+  constructor(
+    @Inject(DRIZZLE) private readonly db: NodePgDatabase<typeof schema>,
+    private readonly coupleContextService: CoupleContextService,
+  ) {}
 
   private async calculateSplitDetails(expenseDate: Date, coupleId: string) {
-    const supabase = this.supabaseService.getClient();
     const year = expenseDate.getFullYear();
     const month = expenseDate.getMonth() + 1;
 
-    const { data: incomes, error } = await supabase
-      .from('incomes')
-      .select('amount, user_id, date')
-      .eq('couple_id', coupleId);
+    const allIncomes = await this.db
+      .select({
+        amount: incomes.amount,
+        userId: incomes.userId,
+        date: incomes.date,
+      })
+      .from(incomes)
+      .where(eq(incomes.coupleId, coupleId));
 
-    if (error) {
-      throw new InternalServerErrorException(
-        `Error fetching incomes: ${error.message}`,
-      );
+    if (allIncomes.length === 0) {
+      return { msg: 'No incomes found for the month, using 50/50 fallback.' };
     }
 
-    const currentMonthIncomes = incomes.filter((inc) => {
+    const currentMonthIncomes = allIncomes.filter((inc) => {
       const incDate = new Date(inc.date);
       return incDate.getFullYear() === year && incDate.getMonth() + 1 === month;
     });
@@ -44,7 +55,8 @@ export class ExpensesService {
 
     const userTotals: Record<string, number> = {};
     for (const inc of currentMonthIncomes) {
-      userTotals[inc.user_id] = (userTotals[inc.user_id] || 0) + inc.amount;
+      userTotals[inc.userId] =
+        (userTotals[inc.userId] || 0) + Number(inc.amount);
     }
 
     const userIds = Object.keys(userTotals);
@@ -67,271 +79,289 @@ export class ExpensesService {
     ownerId: string,
     createExpenseDto: CreateExpenseDto,
   ) {
-    const supabase = this.supabaseService.getClient();
-
     if (createExpenseDto.p_split_method === 'proportional') {
-      // Execute the division calculation as required by the rules.
       await this.calculateSplitDetails(
         new Date(createExpenseDto.p_date),
         coupleId,
       );
     }
 
-    const newExpense: ExpenseInsert = {
-      id: createExpenseDto.p_expense_id,
-      amount: createExpenseDto.p_amount,
-      assigned_user_id: createExpenseDto.p_assigned_user_id,
-      batch_id: createExpenseDto.p_batch_id,
-      batch_name: createExpenseDto.p_batch_name,
-      budget_id: createExpenseDto.p_budget_id,
-      category_id: createExpenseDto.p_category_id,
-      couple_id: coupleId,
-      date: createExpenseDto.p_date,
-      description: createExpenseDto.p_description,
-      is_credit: createExpenseDto.p_is_credit,
-      is_recurring: createExpenseDto.p_is_recurring,
-      owner_id: ownerId,
-      paid_by: createExpenseDto.p_paid_by,
-      recurrence_end_date: createExpenseDto.p_recurrence_end_date,
-      recurrence_interval: createExpenseDto.p_recurrence_interval,
-      split_method: createExpenseDto.p_split_method,
-    };
+    await Promise.all([
+      this.coupleContextService.assertOptionalFamilyMemberBelongsToCouple(
+        coupleId,
+        createExpenseDto.p_assigned_user_id,
+      ),
+      this.coupleContextService.assertOptionalBudgetBelongsToCouple(
+        coupleId,
+        createExpenseDto.p_budget_id,
+      ),
+    ]);
 
-    const { data, error } = await supabase
-      .from('expenses')
-      .insert(newExpense)
-      .select()
-      .single();
+    const inserted = await this.db
+      .insert(expenses)
+      .values({
+        id: createExpenseDto.p_expense_id,
+        amount: String(createExpenseDto.p_amount),
+        assignedUserId: createExpenseDto.p_assigned_user_id || null,
+        batchId: createExpenseDto.p_batch_id || null,
+        batchName: createExpenseDto.p_batch_name ?? null,
+        budgetId: createExpenseDto.p_budget_id || null,
+        categoryId: createExpenseDto.p_category_id ?? 0,
+        coupleId,
+        date: new Date(createExpenseDto.p_date),
+        description: createExpenseDto.p_description,
+        isCredit: createExpenseDto.p_is_credit ?? false,
+        isRecurring: createExpenseDto.p_is_recurring,
+        ownerId,
+        paidBy: createExpenseDto.p_paid_by,
+        recurrenceEndDate: createExpenseDto.p_recurrence_end_date
+          ? new Date(createExpenseDto.p_recurrence_end_date)
+          : null,
+        recurrenceInterval: normalizeRecurrenceInterval(
+          createExpenseDto.p_recurrence_interval,
+        ),
+        splitMethod: createExpenseDto.p_split_method,
+      })
+      .returning();
 
-    if (error) throw new InternalServerErrorException(error.message);
-    return data;
+    if (!inserted[0])
+      throw new InternalServerErrorException('Error al insertar gasto');
+    return inserted[0];
   }
 
-  async updateExpense(updateExpenseDto: UpdateExpenseDto) {
-    const supabase = this.supabaseService.getClient();
+  async updateExpense(coupleId: string, updateExpenseDto: UpdateExpenseDto) {
+    await Promise.all([
+      this.coupleContextService.assertOptionalFamilyMemberBelongsToCouple(
+        coupleId,
+        updateExpenseDto.p_assigned_user_id,
+      ),
+      this.coupleContextService.assertOptionalBudgetBelongsToCouple(
+        coupleId,
+        updateExpenseDto.p_budget_id,
+      ),
+    ]);
 
-    const updatePayload = {
-      amount: updateExpenseDto.p_amount,
-      assigned_user_id: updateExpenseDto.p_assigned_user_id,
-      batch_id: updateExpenseDto.p_batch_id,
-      batch_name: updateExpenseDto.p_batch_name,
-      budget_id: updateExpenseDto.p_budget_id,
-      category_id: updateExpenseDto.p_category_id,
-      date: updateExpenseDto.p_date,
-      description: updateExpenseDto.p_description,
-      is_credit: updateExpenseDto.p_is_credit,
-      is_recurring: updateExpenseDto.p_is_recurring,
-      paid_by: updateExpenseDto.p_paid_by,
-      recurrence_end_date: updateExpenseDto.p_recurrence_end_date,
-      recurrence_interval: updateExpenseDto.p_recurrence_interval,
-      split_method: updateExpenseDto.p_split_method,
-    };
+    const updated = await this.db
+      .update(expenses)
+      .set({
+        amount: String(updateExpenseDto.p_amount),
+        assignedUserId: updateExpenseDto.p_assigned_user_id ?? null,
+        batchId: updateExpenseDto.p_batch_id ?? null,
+        batchName: updateExpenseDto.p_batch_name ?? null,
+        budgetId: updateExpenseDto.p_budget_id ?? null,
+        categoryId: updateExpenseDto.p_category_id ?? undefined,
+        date: new Date(updateExpenseDto.p_date),
+        description: updateExpenseDto.p_description,
+        isCredit: updateExpenseDto.p_is_credit ?? null,
+        isRecurring: updateExpenseDto.p_is_recurring,
+        paidBy: updateExpenseDto.p_paid_by,
+        recurrenceEndDate: updateExpenseDto.p_recurrence_end_date
+          ? new Date(updateExpenseDto.p_recurrence_end_date)
+          : null,
+        recurrenceInterval: normalizeRecurrenceInterval(
+          updateExpenseDto.p_recurrence_interval,
+        ),
+        splitMethod: updateExpenseDto.p_split_method,
+      })
+      .where(
+        and(
+          eq(expenses.id, updateExpenseDto.p_expense_id),
+          eq(expenses.coupleId, coupleId),
+        ),
+      )
+      .returning();
 
-    const { data, error } = await supabase
-      .from('expenses')
-      .update(updatePayload)
-      .eq('id', updateExpenseDto.p_expense_id)
-      .select()
-      .single();
-
-    if (error) throw new InternalServerErrorException(error.message);
-    return data;
+    if (!updated[0])
+      throw new NotFoundException(
+        'Gasto no encontrado o no tienes permiso para modificarlo',
+      );
+    return updated[0];
   }
 
   async updateRecurringExpense(
+    coupleId: string,
     ownerId: string,
     updateRecurringDto: UpdateRecurringExpenseDto,
   ) {
-    const supabase = this.supabaseService.getClient();
     const oldExpenseId = updateRecurringDto.p_old_expense_id;
 
-    // 3.1: Obtener el gasto actual.
-    const { data: currentExpense, error: fetchError } = await supabase
-      .from('expenses')
-      .select('*')
-      .eq('id', oldExpenseId)
-      .single();
+    // Obtener el gasto original y validar que pertenece a la pareja
+    const currentResult = await this.db
+      .select()
+      .from(expenses)
+      .where(
+        and(eq(expenses.id, oldExpenseId), eq(expenses.coupleId, coupleId)),
+      )
+      .limit(1);
 
-    if (fetchError || !currentExpense) {
+    const currentExpense = currentResult[0];
+    if (!currentExpense) {
       throw new NotFoundException(`Expense with id ${oldExpenseId} not found`);
     }
 
-    // 3.2: Ejecutar UPDATE en expenses fijando recurrence_end_date
-    const { error: updateError } = await supabase
-      .from('expenses')
-      .update({ recurrence_end_date: updateRecurringDto.p_cutoff_date })
-      .eq('id', oldExpenseId);
-
-    if (updateError)
-      throw new InternalServerErrorException(updateError.message);
-
-    // 3.3 & 3.4: Construir nuevo gasto y ejecutar INSERT
     const newExpenseDto = updateRecurringDto.p_new_expense;
-    const newExpensePayload: ExpenseInsert = {
-      id: newExpenseDto.p_expense_id,
-      amount: newExpenseDto.p_amount,
-      assigned_user_id: newExpenseDto.p_assigned_user_id,
-      batch_id: newExpenseDto.p_batch_id,
-      batch_name: newExpenseDto.p_batch_name,
-      budget_id: newExpenseDto.p_budget_id,
-      category_id: newExpenseDto.p_category_id,
-      date: newExpenseDto.p_date,
-      description: newExpenseDto.p_description,
-      is_credit: newExpenseDto.p_is_credit,
-      is_recurring: newExpenseDto.p_is_recurring,
-      paid_by: newExpenseDto.p_paid_by,
-      recurrence_end_date: null,
-      recurrence_interval: newExpenseDto.p_recurrence_interval,
-      split_method: newExpenseDto.p_split_method,
-      couple_id: currentExpense.couple_id,
-      owner_id: ownerId,
-    };
+    const newExpenseDate = new Date(newExpenseDto.p_date);
+    const cutoffDate = getPreviousMonthEndDate(newExpenseDate);
+    const recurrenceInterval = normalizeRecurrenceInterval(
+      newExpenseDto.p_recurrence_interval ?? currentExpense.recurrenceInterval,
+    );
 
-    const { data: newExpense, error: insertError } = await supabase
-      .from('expenses')
-      .insert(newExpensePayload)
-      .select()
-      .single();
+    // Fijar recurrence_end_date en el gasto original (validando coupleId)
+    await this.db
+      .update(expenses)
+      .set({
+        recurrenceEndDate: cutoffDate,
+      })
+      .where(
+        and(eq(expenses.id, oldExpenseId), eq(expenses.coupleId, coupleId)),
+      );
 
-    if (insertError)
-      throw new InternalServerErrorException(insertError.message);
+    // Insertar nuevo gasto recurrente con el coupleId validado
+    const inserted = await this.db
+      .insert(expenses)
+      .values({
+        id: newExpenseDto.p_expense_id,
+        amount: String(newExpenseDto.p_amount),
+        assignedUserId: newExpenseDto.p_assigned_user_id ?? null,
+        batchId: newExpenseDto.p_batch_id ?? null,
+        batchName: newExpenseDto.p_batch_name ?? null,
+        budgetId: newExpenseDto.p_budget_id ?? null,
+        categoryId: newExpenseDto.p_category_id ?? undefined,
+        date: newExpenseDate,
+        description: newExpenseDto.p_description,
+        isCredit: newExpenseDto.p_is_credit ?? false,
+        isRecurring: true,
+        paidBy: newExpenseDto.p_paid_by,
+        recurrenceEndDate: null,
+        recurrenceInterval,
+        splitMethod: newExpenseDto.p_split_method,
+        coupleId,
+        ownerId,
+      })
+      .returning();
 
-    return newExpense;
+    if (!inserted[0])
+      throw new InternalServerErrorException(
+        'Error al insertar gasto recurrente',
+      );
+    return inserted[0];
   }
 
   async stopRecurringExpense(
     coupleId: string,
     stopRecurringDto: StopRecurringExpenseDto,
   ) {
-    const supabase = this.supabaseService.getClient();
+    const updated = await this.db
+      .update(expenses)
+      .set({ recurrenceEndDate: new Date(stopRecurringDto.p_end_date) })
+      .where(
+        and(
+          eq(expenses.id, stopRecurringDto.p_expense_id),
+          eq(expenses.coupleId, coupleId),
+        ),
+      )
+      .returning();
 
-    const { data, error } = await supabase
-      .from('expenses')
-      .update({ recurrence_end_date: stopRecurringDto.p_end_date })
-      .eq('id', stopRecurringDto.p_expense_id)
-      .eq('couple_id', coupleId)
-      .select()
-      .single();
-
-    if (error) {
-      if (error.code === 'PGRST116') {
-        throw new NotFoundException(
-          'Gasto no encontrado o no tienes permiso para modificarlo',
-        );
-      }
-      throw new InternalServerErrorException(error.message);
+    if (!updated[0]) {
+      throw new NotFoundException(
+        'Gasto no encontrado o no tienes permiso para modificarlo',
+      );
     }
-    return data;
+    return updated[0];
   }
 
   async deleteExpensesBatch(
     coupleId: string,
     deleteBatchDto: DeleteExpensesBatchDto,
   ) {
-    const supabase = this.supabaseService.getClient();
+    const deleted = await this.db
+      .delete(expenses)
+      .where(
+        and(
+          inArray(expenses.id, deleteBatchDto.p_expense_ids),
+          eq(expenses.coupleId, coupleId),
+        ),
+      )
+      .returning();
 
-    const { data, error } = await supabase
-      .from('expenses')
-      .delete()
-      .in('id', deleteBatchDto.p_expense_ids)
-      .eq('couple_id', coupleId)
-      .select();
-
-    if (error) throw new InternalServerErrorException(error.message);
-    return { deleted: data?.length || 0 };
+    return { deleted: deleted.length };
   }
-
-  // --- General CRUD endpoints (Step 6) ---
 
   /**
    * GET /expenses
    * Lista gastos de la pareja con filtro opcional por mes y año.
    */
   async listExpenses(coupleId: string, month?: number, year?: number) {
-    const supabase = this.supabaseService.getClient();
-
-    let query = supabase
-      .from('expenses')
-      .select('*')
-      .eq('couple_id', coupleId)
-      .order('date', { ascending: false });
-
     if (month !== undefined && year !== undefined) {
-      const startDate = new Date(year, month - 1, 1).toISOString();
-      const endDate = new Date(year, month, 0, 23, 59, 59, 999).toISOString();
-      query = query.gte('date', startDate).lte('date', endDate);
+      const startDate = new Date(year, month - 1, 1);
+      const endDate = new Date(year, month, 0, 23, 59, 59, 999);
+
+      return this.db
+        .select()
+        .from(expenses)
+        .where(
+          and(
+            eq(expenses.coupleId, coupleId),
+            gte(expenses.date, startDate),
+            lte(expenses.date, endDate),
+          ),
+        )
+        .orderBy(desc(expenses.date));
     }
 
-    const { data, error } = await query;
-
-    if (error) throw new InternalServerErrorException(error.message);
-    return data;
+    return this.db
+      .select()
+      .from(expenses)
+      .where(eq(expenses.coupleId, coupleId))
+      .orderBy(desc(expenses.date));
   }
 
   /**
    * DELETE /expenses/:id
-   * Elimina un gasto individual validando que pertenezca a la pareja.
    */
   async deleteExpense(coupleId: string, id: string) {
-    const supabase = this.supabaseService.getClient();
+    const deleted = await this.db
+      .delete(expenses)
+      .where(and(eq(expenses.id, id), eq(expenses.coupleId, coupleId)))
+      .returning();
 
-    const { data, error } = await supabase
-      .from('expenses')
-      .delete()
-      .eq('id', id)
-      .eq('couple_id', coupleId)
-      .select()
-      .single();
-
-    if (error) {
-      if (error.code === 'PGRST116') {
-        throw new NotFoundException(
-          'Gasto no encontrado o sin permiso para eliminarlo',
-        );
-      }
-      throw new InternalServerErrorException(error.message);
+    if (!deleted[0]) {
+      throw new NotFoundException(
+        'Gasto no encontrado o sin permiso para eliminarlo',
+      );
     }
 
-    return { deleted: true, id: data?.id };
+    return { deleted: true, id: deleted[0].id };
   }
 
   // --- Methods for Chatbot Function Calling (RAG) ---
 
   async getMonthlyExpenses(coupleId: string, year: number, month: number) {
-    const supabase = this.supabaseService.getClient();
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0, 23, 59, 59, 999);
 
-    // Create date range for the month
-    const startDate = new Date(year, month - 1, 1).toISOString();
-    const endDate = new Date(year, month, 0, 23, 59, 59, 999).toISOString();
-
-    const { data, error } = await supabase
-      .from('expenses')
-      .select('*')
-      .eq('couple_id', coupleId)
-      .gte('date', startDate)
-      .lte('date', endDate)
-      .order('date', { ascending: false });
-
-    if (error) throw new InternalServerErrorException(error.message);
-    return data;
+    return this.db
+      .select()
+      .from(expenses)
+      .where(
+        and(
+          eq(expenses.coupleId, coupleId),
+          gte(expenses.date, startDate),
+          lte(expenses.date, endDate),
+        ),
+      )
+      .orderBy(desc(expenses.date));
   }
 
-  async getIncomes(coupleId: string, year: number, month: number) {
-    const supabase = this.supabaseService.getClient();
+  async getIncomes(coupleId: string, _year: number, _month: number) {
+    return this.db.select().from(incomes).where(eq(incomes.coupleId, coupleId));
+  }
 
-    // Create date range for the month
-    const startDate = new Date(year, month - 1, 1).toISOString();
-    const endDate = new Date(year, month, 0, 23, 59, 59, 999).toISOString();
-
-    const { data, error } = await supabase
-      .from('incomes')
-      .select('*')
-      .eq('couple_id', coupleId)
-      .gte('date', startDate)
-      .lte('date', endDate);
-
-    if (error) throw new InternalServerErrorException(error.message);
-    return data;
+  async getDeductions(coupleId: string) {
+    return this.db
+      .select()
+      .from(deductions)
+      .where(eq(deductions.coupleId, coupleId));
   }
 
   async updateExpenseCategory(
@@ -339,22 +369,15 @@ export class ExpensesService {
     expenseId: string,
     categoryId: number,
   ) {
-    const supabase = this.supabaseService.getClient();
+    const updated = await this.db
+      .update(expenses)
+      .set({ categoryId })
+      .where(and(eq(expenses.id, expenseId), eq(expenses.coupleId, coupleId)))
+      .returning();
 
-    const { data, error } = await supabase
-      .from('expenses')
-      .update({ category_id: categoryId })
-      .eq('id', expenseId)
-      .eq('couple_id', coupleId)
-      .select()
-      .single();
-
-    if (error) {
-      if (error.code === 'PGRST116') {
-        throw new NotFoundException('Expense not found or unauthorized');
-      }
-      throw new InternalServerErrorException(error.message);
+    if (!updated[0]) {
+      throw new NotFoundException('Expense not found or unauthorized');
     }
-    return data;
+    return updated[0];
   }
 }

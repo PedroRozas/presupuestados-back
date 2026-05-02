@@ -10,10 +10,14 @@ import { SupabaseService } from '../../supabase/supabase.service.js';
 export interface AuthenticatedUser {
   id: string;
   email: string;
+  user_metadata?: {
+    name?: string;
+    full_name?: string;
+  };
 }
 
 /**
- * Guard JWT que valida el Bearer token contra Supabase Auth.
+ * Guard JWT que valida el token contra Supabase Auth.
  * Si el token es válido, inyecta req.user con { id, email }.
  * La validación del usuario ocurre aquí en el Guard, no en el SupabaseService.
  */
@@ -23,7 +27,7 @@ export class AuthGuard implements CanActivate {
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest<Request>();
-    const token = this.extractTokenFromHeader(request);
+    const token = this.extractTokenFromRequest(request);
 
     if (!token) {
       throw new UnauthorizedException(
@@ -39,18 +43,34 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException('Token inválido o expirado');
     }
 
+    const name = data.user.user_metadata?.['name'];
+    const fullName = data.user.user_metadata?.['full_name'];
+
     (request as Request & { user: AuthenticatedUser }).user = {
       id: data.user.id,
       email: data.user.email ?? '',
+      user_metadata: {
+        ...(typeof name === 'string' ? { name } : {}),
+        ...(typeof fullName === 'string' ? { full_name: fullName } : {}),
+      },
     };
 
     return true;
   }
 
-  private extractTokenFromHeader(request: Request): string | undefined {
+  private extractTokenFromRequest(request: Request): string | undefined {
     const authHeader = request.headers['authorization'];
-    if (!authHeader) return undefined;
+    const headerToken = this.extractBearerToken(authHeader);
+    if (headerToken) return headerToken;
 
+    return (request as Request & { cookies?: Record<string, string> })
+      .cookies?.['access_token'];
+  }
+
+  private extractBearerToken(
+    authHeader: string | undefined,
+  ): string | undefined {
+    if (!authHeader) return undefined;
     const [type, token] = authHeader.split(' ');
     return type === 'Bearer' ? token : undefined;
   }
