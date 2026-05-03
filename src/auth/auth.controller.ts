@@ -21,6 +21,7 @@ import { RefreshDto } from './dto/refresh.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { ForgotPasswordDto } from './dto/forgot-password.dto.js';
 import { UpdatePasswordDto } from './dto/update-password.dto.js';
+import { RateLimit } from '../security/decorators/rate-limit.decorator.js';
 
 const ACCESS_TOKEN_COOKIE = 'access_token';
 const REFRESH_TOKEN_COOKIE = 'refresh_token';
@@ -79,6 +80,7 @@ export class AuthController {
    * No requiere token previo.
    */
   @Post('register')
+  @RateLimit('authRegister')
   @HttpCode(HttpStatus.CREATED)
   register(@Body() dto: RegisterDto) {
     return this.authService.register(dto);
@@ -89,6 +91,7 @@ export class AuthController {
    * Autentica al usuario y deja access_token + refresh_token en cookies HttpOnly.
    */
   @Post('login')
+  @RateLimit('authLogin')
   @HttpCode(HttpStatus.OK)
   async login(
     @Body() dto: LoginDto,
@@ -104,6 +107,7 @@ export class AuthController {
    * Renueva la sesión usando la cookie refresh_token.
    */
   @Post('refresh')
+  @RateLimit('authRefresh')
   @HttpCode(HttpStatus.OK)
   async refresh(
     @Req() req: Request,
@@ -174,6 +178,7 @@ export class AuthController {
    * Siempre responde con éxito (no revela si el email existe).
    */
   @Post('forgot-password')
+  @RateLimit('passwordReset')
   @HttpCode(HttpStatus.OK)
   forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.authService.forgotPassword(dto);

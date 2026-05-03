@@ -185,7 +185,7 @@ Problema:
 
 - `SUPABASE_SERVICE_KEY`
 - `DATABASE_URL`
-- `GEMINI_API_KEY`
+- `OPENAI_API_KEY`
 
 Impacto:
 

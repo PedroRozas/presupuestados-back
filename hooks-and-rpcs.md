@@ -35,7 +35,7 @@ Documento de referencia que describe cada hook de la aplicación, los cálculos 
 | `sync_deductions`              | income   | Reemplaza/sincroniza las deducciones del usuario              |
 | `get_categories_rpc`           | category | Lista categorías de gastos disponibles                        |
 | `expenses` (tabla directa)     | expense  | Lectura de todos los gastos del hogar (ordenados por fecha)   |
-| `gemini-ai` (Edge Function)    | expense  | Parsea un extracto bancario con IA y retorna gastos extraídos |
+| `POST /ai/process-statement`   | expense  | Parsea un extracto bancario con IA y retorna gastos extraídos |
 
 ---
 
@@ -231,7 +231,7 @@ No realiza cálculos derivados; gestiona el estado local de edición/creación d
 **Flujo:**
 
 1. El usuario sube un archivo (PDF/imagen de extracto bancario).
-2. `expenseService.parseStatement` envía el archivo a la **Edge Function `gemini-ai`**, que retorna un array de `ExtractedExpense`.
+2. `aiApi.processStatement` envía el archivo a `POST /ai/process-statement`, que retorna un array de `ExtractedExpense`.
 3. El hook prepara los gastos como `StagedExpense[]`, infiere el presupuesto por categoría y asigna el método de división según `profile.default_split_method`.
 4. El usuario revisa y edita los ítems.
 5. Al confirmar, `addExpenses` inserta todos los gastos en lote directamente en la tabla `expenses` (sin RPC, usando `supabase.from('expenses').insert(...)`).
@@ -246,7 +246,7 @@ No realiza cálculos derivados; gestiona el estado local de edición/creación d
 
 **Acciones que invocan RPCs / servicios:**
 
-- `expenseService.parseStatement` → Edge Function `gemini-ai`
+- `aiApi.processStatement` → `POST /ai/process-statement`
 - `addExpenses` → insert directo en tabla `expenses`
 
 ---

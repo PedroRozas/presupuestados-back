@@ -23,7 +23,6 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "@google/genai": "^1.44.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.3",
     "@nestjs/core": "^11.0.1",
@@ -35,6 +34,8 @@
     "class-validator": "^0.15.1",
     "cookie-parser": "^1.4.7",
     "drizzle-orm": "^0.45.1",
+    "helmet": "^8.1.0",
+    "ioredis": "^5.10.1",
     "multer": "^2.1.1",
     "openai": "^6.35.0",
     "pg": "^8.20.0",

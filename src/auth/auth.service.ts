@@ -13,6 +13,7 @@ import { RegisterDto } from './dto/register.dto.js';
 import { RefreshDto } from './dto/refresh.dto.js';
 import { ForgotPasswordDto } from './dto/forgot-password.dto.js';
 import { UpdatePasswordDto } from './dto/update-password.dto.js';
+import { SecurityEventsService } from '../security/security-events.service.js';
 
 export interface AuthSession {
   access_token: string;
@@ -45,6 +46,7 @@ export class AuthService {
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly couplesService: CouplesService,
+    private readonly securityEventsService: SecurityEventsService,
   ) {}
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -103,6 +105,7 @@ export class AuthService {
 
     if (error || !data.session || !data.user) {
       this.logger.warn(`Login fallido para ${dto.email}: ${error?.message}`);
+      this.securityEventsService.logLoginFailed(dto.email, error?.message);
       if (error?.message.toLowerCase().includes('email not confirmed')) {
         throw new UnauthorizedException(
           'Debes confirmar tu correo antes de iniciar sesión.',
@@ -117,6 +120,10 @@ export class AuthService {
     if (!data.user.email_confirmed_at) {
       this.logger.warn(
         `Login bloqueado para ${dto.email}: email no confirmado`,
+      );
+      this.securityEventsService.logLoginFailed(
+        dto.email,
+        'email no confirmado',
       );
       throw new UnauthorizedException(
         'Debes confirmar tu correo antes de iniciar sesión.',
@@ -435,7 +442,8 @@ export class AuthService {
 
     // No se propaga el error para no revelar si el email está registrado
     return {
-      message: 'Si el email existe, recibirás un enlace de recuperación',
+      message:
+        'Si el correo existe, recibirás instrucciones para recuperar tu contraseña.',
     };
   }
 

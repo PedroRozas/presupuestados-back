@@ -3,11 +3,34 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
+import { json, type Express, urlencoded } from 'express';
+
+const parseTrustProxy = (): boolean | number | string => {
+  const value = process.env['TRUST_PROXY'];
+
+  if (!value || value === 'false') return false;
+  if (value === 'true') return true;
+
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) ? numericValue : value;
+};
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { bodyParser: false });
   const corsOrigin = process.env['CORS_ORIGIN'] ?? 'http://localhost:5173';
+  const bodyLimit = process.env['JSON_BODY_LIMIT'] ?? '1mb';
 
+  const expressApp = app.getHttpAdapter().getInstance() as Express;
+  expressApp.set('trust proxy', parseTrustProxy());
+  app.use(
+    helmet({
+      contentSecurityPolicy:
+        process.env['NODE_ENV'] === 'production' ? undefined : false,
+    }),
+  );
+  app.use(json({ limit: bodyLimit }));
+  app.use(urlencoded({ extended: true, limit: bodyLimit }));
   app.use(cookieParser());
 
   app.enableCors({

@@ -5,16 +5,16 @@ Repositorios revisados: `presupuestados-back`, `presupuestados-web`
 
 ## Resumen ejecutivo
 
-El chatbot actual funciona como un asistente financiero autenticado para parejas. En backend recibe `POST /chatbot/chat`, valida el usuario con `AuthGuard`, busca el `coupleId`, prepara un prompt de sistema, manda historial y mensaje a Gemini (`gemini-2.5-flash`) y permite que el modelo llame herramientas internas para consultar gastos, ingresos, deducciones y actualizar categorias.
+El chatbot actual funciona como un asistente financiero autenticado para parejas. En backend recibe `POST /chatbot/chat`, valida el usuario con `AuthGuard`, busca el `coupleId`, prepara un prompt de sistema, manda historial y mensaje a OpenAI Responses API y permite que el modelo llame herramientas internas para consultar gastos, ingresos, deducciones y presupuestos.
 
-La base ya esta bien encaminada: el acceso esta autenticado, los datos se filtran por `coupleId`, existe control mensual de uso IA, el historial se recorta y hay un filtro inicial de prompt injection. Pero para ponerlo en produccion con mas confianza y mejor eficiencia hay que fortalecer cuatro cosas antes de migrar a OpenAI:
+La base ya esta bien encaminada: el acceso esta autenticado, los datos se filtran por `coupleId`, existe control mensual de uso IA, el historial se recorta y hay un filtro inicial de prompt injection. Para ponerlo en produccion con mas confianza y mejor eficiencia hay que fortalecer cuatro cosas:
 
 1. Separar herramientas de lectura y escritura. Hoy el modelo puede ejecutar `update_expense_category` sin confirmacion humana.
 2. Reemplazar consultas crudas por tools agregadas por mes/rango. El LLM debe pedir "mayo 2026" o "ultimos 3 meses" y recibir resumen compacto, no todos los gastos.
 3. Reducir la exposicion de datos crudos al modelo. Hoy las tools devuelven filas completas de DB.
 4. Reemplazar el filtro regex por defensa en capas: validacion, prompts robustos, tool policy estricta, moderacion, logs seguros y pruebas adversariales.
 
-La migracion a OpenAI es tecnicamente directa porque `presupuestados-back` ya usa el SDK `openai` y `responses.create` en `src/ai/ai.service.ts`. El cambio recomendado es llevar el chatbot tambien a Responses API, con function calling, `store: false`, limite de salida y herramientas tipadas. La inteligencia real debe venir de una arquitectura de "planner + tools": el modelo interpreta la pregunta, el backend resuelve fechas y calcula agregados, y el modelo solo explica el resultado.
+El backend ya usa el SDK `openai` y `responses.create` tanto en `src/ai/ai.service.ts` como en `src/chatbot/chatbot.service.ts`. La inteligencia real debe venir de una arquitectura de "planner + tools": el modelo interpreta la pregunta, el backend resuelve fechas y calcula agregados, y el modelo solo explica el resultado.
 
 ## Fuentes oficiales OpenAI usadas
 
@@ -37,19 +37,23 @@ Archivos principales:
   - Pasa `req.user.id` al service.
 
 - `src/chatbot/chatbot.service.ts`
-  - Inicializa `GoogleGenAI` con `GEMINI_API_KEY`.
+  - Inicializa `OpenAI` con `OPENAI_API_KEY`.
   - Busca `profiles.coupleId`, `profiles.isPremium` y `profiles.fullName`.
   - Busca el `family_member` vinculado al usuario.
   - Sanitiza control chars, trim y corta a 1000 caracteres.
   - Bloquea algunas frases sospechosas con regex.
   - Mantiene maximo 10 mensajes de historial.
-  - Define tools de Gemini:
-    - `get_monthly_expenses`
-    - `get_incomes`
-    - `get_deductions`
-    - `update_expense_category`
+  - Define tools de OpenAI:
+    - `get_monthly_expense_summary`
+    - `search_monthly_expenses`
+    - `get_largest_expenses`
+    - `get_category_breakdown`
+    - `get_income_summary`
+    - `get_budget_status`
+    - `compare_months`
+    - `get_cashflow_summary`
   - Reserva cupo `chatbot_response` antes de llamar al proveedor IA.
-  - Reembolsa cupo si falla Gemini.
+  - Reembolsa cupo si falla el proveedor IA.
   - Procesa tool calls hasta 5 rondas.
 
 - `src/expenses/expenses.service.ts`
@@ -247,7 +251,7 @@ Mover calculos financieros repetibles a helpers backend o tools agregadas. El mo
 
 Ubicacion:
 
-- `src/chatbot/chatbot.service.ts`, llamadas a Gemini
+- `src/chatbot/chatbot.service.ts`, llamadas al proveedor IA
 
 Problema:
 
@@ -618,11 +622,11 @@ Antes de responder:
 - [ ] Agregar rangos de fecha y `limit`.
 - [ ] Agregar logs estructurados de tool calls sin payload sensible.
 
-### Fase 2: migrar proveedor a OpenAI
+### Fase 2: consolidar proveedor OpenAI
 
-- [ ] Cambiar `ChatbotService` de `GoogleGenAI` a `OpenAI`.
-- [ ] Usar `OPENAI_API_KEY`.
-- [ ] Agregar `OPENAI_CHATBOT_MODEL`.
+- [x] Usar `OpenAI` en `ChatbotService`.
+- [x] Usar `OPENAI_API_KEY`.
+- [x] Agregar `OPENAI_CHATBOT_MODEL`.
 - [ ] Implementar tools con formato OpenAI:
 
 ```ts
@@ -666,8 +670,8 @@ const tools = [
 - [ ] Enviar tool outputs como `function_call_output` con `call_id`.
 - [ ] Usar `store: false`, `max_output_tokens` y `parallel_tool_calls: false`.
 - [ ] Mantener reembolso de uso en errores tecnicos.
-- [ ] Eliminar dependencia `@google/genai` cuando ya no se use.
-- [ ] Retirar `GEMINI_API_KEY` de `.env.example` si no queda ningun uso.
+- [x] Eliminar dependencia legacy de proveedor anterior cuando ya no se use.
+- [x] Retirar la API key legacy de `.env.example` al no quedar ningun uso.
 
 ### Fase 3: prompts versionados y evals
 
@@ -708,7 +712,6 @@ const tools = [
   - tokens estimados
   - uso por feature
 - [ ] Feature flag:
-  - `CHATBOT_PROVIDER=gemini|openai`
   - `CHATBOT_READ_ONLY=true`
 - [ ] Rollout:
   - local
@@ -740,7 +743,7 @@ const tools = [
 1. Hacer read-only el chatbot y minimizar outputs de tools.
 2. Agregar `ChatbotDateResolver` y tools agregadas por mes/rango.
 3. Agregar `PromptSecurityService` y tests.
-4. Migrar Gemini a OpenAI Responses API.
+4. Consolidar el uso de OpenAI Responses API.
 5. Mejorar prompts y montar evals.
 6. Solo despues, pensar en acciones confirmables.
 

@@ -1,98 +1,181 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Presupuestados Back
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+API REST de Presupuestados, construida con NestJS y TypeScript. Centraliza la
+autenticacion, perfiles, parejas, gastos, ingresos, presupuestos, deducciones,
+dashboard financiero y funciones asistidas por IA para que el frontend no
+acceda directamente a Supabase.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Stack
 
-## Description
+- NestJS 11 + TypeScript
+- Supabase Auth y PostgreSQL
+- Drizzle ORM / Drizzle Kit para migraciones SQL
+- OpenAI para lectura de cartolas y chatbot financiero
+- Redis opcional para limites de abuso y rate limiting
+- Swagger en desarrollo
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## Requisitos
 
-## Project setup
+- Node.js
+- npm
+- Proyecto Supabase con URL, service role key y base PostgreSQL
+- API key de OpenAI si se usan las funciones de IA
+- Redis si se quiere persistir rate limiting fuera de memoria
 
-```bash
-$ npm install
-```
+## Configuracion local
 
-## Compile and run the project
+1. Instalar dependencias:
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+npm install
 ```
 
-## Run tests
+2. Crear el archivo de entorno:
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+cp .env.example .env
 ```
 
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+3. Completar las variables principales:
 
 ```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_KEY=your-service-role-key
+DATABASE_URL=postgresql://postgres:[PASSWORD]@db.[PROJECT_ID].supabase.co:5432/postgres
+OPENAI_API_KEY=your-openai-api-key
+CORS_ORIGIN=http://localhost:3000
+PORT=3001
 ```
 
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
+`PORT` es opcional en el codigo y por defecto usa `3000`. Si corres el frontend
+de Vite en `3000`, usa otro puerto para el backend y actualiza `VITE_API_URL`
+en el frontend.
 
-## Resources
+## Ejecutar
 
-Check out a few resources that may come in handy when working with NestJS:
+```bash
+# Desarrollo con watch
+npm run start:dev
 
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
+# Desarrollo sin watch
+npm run start
 
-## Support
+# Produccion despues de compilar
+npm run build
+npm run start:prod
+```
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+Con `NODE_ENV` distinto de `production`, Swagger queda disponible en:
 
-## Stay in touch
+```text
+http://localhost:<PORT>/api
+```
 
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
+## Scripts utiles
 
-## License
+```bash
+npm run build       # Compila el proyecto NestJS
+npm run lint        # Ejecuta ESLint con fix
+npm run format      # Formatea archivos TS con Prettier
+npm run test        # Pruebas unitarias
+npm run test:e2e    # Pruebas end-to-end
+npm run test:cov    # Cobertura de tests
+npm run db:generate # Genera migraciones Drizzle
+npm run db:migrate  # Aplica migraciones Drizzle
+npm run db:studio   # Abre Drizzle Studio
+```
 
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+## Arquitectura
+
+La aplicacion esta organizada por modulos de NestJS:
+
+- `auth`: registro, login, refresh, logout, usuario actual y recuperacion de password.
+- `profiles`: lectura y actualizacion del perfil autenticado.
+- `couples` y `partner-requests`: vinculacion de pareja e invitaciones.
+- `family-members`: miembros asociados a la unidad familiar.
+- `expenses`: gastos, gastos recurrentes, detencion de recurrencias y eliminacion por lote.
+- `incomes`: ingresos del hogar.
+- `deductions`: deducciones aplicadas al presupuesto.
+- `budgets`: presupuestos y resumen por presupuesto.
+- `categories`: categorias de gastos.
+- `dashboard`: payload consolidado para la carga inicial y resumen financiero.
+- `ai`: procesamiento de cartolas o estados de cuenta.
+- `chatbot`: asistente financiero con herramientas controladas por backend.
+- `ai-usage`: estado de uso y limites de funciones IA.
+- `security`: rate limiting, Redis opcional y eventos de seguridad.
+- `database` y `supabase`: acceso a PostgreSQL/Supabase.
+
+## Endpoints principales
+
+- `POST /auth/register`
+- `POST /auth/login`
+- `POST /auth/refresh`
+- `POST /auth/logout`
+- `GET /auth/me`
+- `POST /auth/initialize`
+- `POST /auth/forgot-password`
+- `PUT /auth/update-password`
+- `GET /dashboard`
+- `GET /dashboard/bootstrap`
+- `GET /dashboard/summary`
+- `GET|POST|PUT|DELETE /expenses`
+- `GET|POST|PUT|DELETE /incomes`
+- `GET|POST|PUT|DELETE /deductions`
+- `GET|POST|PUT|DELETE /budgets`
+- `POST /ai/process-statement`
+- `POST /chatbot/chat`
+- `GET /ai-usage/status`
+
+La documentacion completa de rutas y DTOs se puede revisar en Swagger durante
+desarrollo.
+
+## Autenticacion y seguridad
+
+El backend valida tokens Bearer emitidos por Supabase Auth. El cliente del
+backend usa `SUPABASE_SERVICE_KEY`, por lo que las reglas de acceso deben
+quedar protegidas en los guards, servicios y consultas del backend.
+
+La app habilita:
+
+- CORS con credenciales para el origen configurado en `CORS_ORIGIN`.
+- `helmet` para headers de seguridad.
+- `cookie-parser` para sesiones y refresh token.
+- `ValidationPipe` global con `whitelist`, `forbidNonWhitelisted` y `transform`.
+- Limites de uso configurables mediante variables `RATE_LIMIT_*`.
+
+## Base de datos
+
+El schema Drizzle vive en:
+
+```text
+src/database/schema/index.ts
+```
+
+Las migraciones generadas se guardan en:
+
+```text
+drizzle/
+```
+
+Flujo habitual:
+
+```bash
+npm run db:generate
+npm run db:migrate
+```
+
+## Relacion con el frontend
+
+El frontend debe consumir esta API mediante `VITE_API_URL`. Para desarrollo,
+mantener alineados:
+
+- `PORT` del backend.
+- `CORS_ORIGIN` del backend.
+- `VITE_API_URL` del frontend.
+
+Ejemplo comun:
+
+```text
+Backend:  PORT=3001, CORS_ORIGIN=http://localhost:3000
+Frontend: VITE_API_URL=http://localhost:3001
+```

@@ -17,6 +17,7 @@ import { PartnerRequestsModule } from './partner-requests/partner-requests.modul
 import { FamilyMembersModule } from './family-members/family-members.module.js';
 import { CategoriesModule } from './categories/categories.module.js';
 import { AIUsageModule } from './ai-usage/ai-usage.module.js';
+import { SecurityModule } from './security/security.module.js';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { AIUsageModule } from './ai-usage/ai-usage.module.js';
       isGlobal: true,
       envFilePath: '.env',
     }),
+    SecurityModule,
     DatabaseModule,
     CommonModule,
     SupabaseModule,

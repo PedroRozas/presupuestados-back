@@ -12,7 +12,7 @@ endobj
 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
 endobj
 5 0 obj
-<< /Length 3866 >>
+<< /Length 3852 >>
 stream
 BT
 /F2 22 Tf
@@ -107,7 +107,7 @@ ET
 BT
 /F1 10.5 Tf
 1 0 0 1 54.00 413.89 Tm
-(- IA generativa: Google Gemini mediante `@google/genai`) Tj
+(- IA generativa: OpenAI mediante `openai`) Tj
 ET
 BT
 /F1 10.5 Tf
@@ -215,7 +215,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 5 0 R >>
 endobj
 7 0 obj
-<< /Length 3284 >>
+<< /Length 3293 >>
 stream
 BT
 /F2 15 Tf
@@ -285,7 +285,7 @@ ET
 BT
 /F1 10.5 Tf
 1 0 0 1 54.00 529.89 Tm
-(Variables de entorno detectadas:) Tj
+(Variables de entorno principales:) Tj
 ET
 BT
 /F1 10.5 Tf
@@ -304,97 +304,102 @@ BT
 ET
 BT
 /F1 10.5 Tf
-1 0 0 1 54.00 457.89 Tm
-(Ademas, los modulos de IA requieren GEMINI_API_KEY, aunque esa variable no aparece en) Tj
+1 0 0 1 54.00 465.89 Tm
+(- `OPENAI_API_KEY`) Tj
 ET
 BT
 /F1 10.5 Tf
-1 0 0 1 54.00 443.89 Tm
-(.env.example.) Tj
+1 0 0 1 54.00 451.89 Tm
+(- `OPENAI_MODEL`) Tj
+ET
+BT
+/F1 10.5 Tf
+1 0 0 1 54.00 437.89 Tm
+(- `OPENAI_CHATBOT_MODEL`) Tj
 ET
 BT
 /F2 15 Tf
-1 0 0 1 54.00 411.89 Tm
+1 0 0 1 54.00 405.89 Tm
 (Funcionalidades implementadas) Tj
 ET
 BT
 /F2 12 Tf
-1 0 0 1 54.00 373.89 Tm
+1 0 0 1 54.00 367.89 Tm
 (1. Autenticacion y onboarding) Tj
 ET
 BT
 /F1 10.5 Tf
-1 0 0 1 54.00 347.89 Tm
+1 0 0 1 54.00 341.89 Tm
 (Endpoints detectados:) Tj
 ET
 BT
 /F1 10.5 Tf
-1 0 0 1 54.00 325.89 Tm
+1 0 0 1 54.00 319.89 Tm
 (- `POST /auth/register`) Tj
 ET
 BT
 /F1 10.5 Tf
-1 0 0 1 54.00 311.89 Tm
+1 0 0 1 54.00 305.89 Tm
 (- `POST /auth/login`) Tj
 ET
 BT
 /F1 10.5 Tf
-1 0 0 1 54.00 297.89 Tm
+1 0 0 1 54.00 291.89 Tm
 (- `POST /auth/refresh`) Tj
 ET
 BT
 /F1 10.5 Tf
-1 0 0 1 54.00 283.89 Tm
+1 0 0 1 54.00 277.89 Tm
 (- `POST /auth/logout`) Tj
 ET
 BT
 /F1 10.5 Tf
-1 0 0 1 54.00 269.89 Tm
+1 0 0 1 54.00 263.89 Tm
 (- `POST /auth/initialize`) Tj
 ET
 BT
 /F1 10.5 Tf
-1 0 0 1 54.00 247.89 Tm
+1 0 0 1 54.00 241.89 Tm
 (Este modulo se encarga de crear usuarios, iniciar sesion, renovar tokens y completar la) Tj
 ET
 BT
 /F1 10.5 Tf
-1 0 0 1 54.00 233.89 Tm
+1 0 0 1 54.00 227.89 Tm
 (inicializacion de datos del usuario recien creado.) Tj
 ET
 BT
 /F2 12 Tf
-1 0 0 1 54.00 205.89 Tm
+1 0 0 1 54.00 199.89 Tm
 (2. Gestion de parejas y perfiles) Tj
 ET
 BT
 /F1 10.5 Tf
-1 0 0 1 54.00 179.89 Tm
+1 0 0 1 54.00 173.89 Tm
 (Endpoints detectados:) Tj
 ET
 BT
 /F1 10.5 Tf
-1 0 0 1 54.00 157.89 Tm
+1 0 0 1 54.00 151.89 Tm
 (- `POST /couples/join`) Tj
 ET
 BT
 /F1 10.5 Tf
-1 0 0 1 54.00 143.89 Tm
+1 0 0 1 54.00 137.89 Tm
 (- `GET /profiles/me`) Tj
 ET
 BT
 /F1 10.5 Tf
-1 0 0 1 54.00 129.89 Tm
+1 0 0 1 54.00 123.89 Tm
 (- `PUT /profiles/me`) Tj
 ET
 BT
 /F1 10.5 Tf
-1 0 0 1 54.00 107.89 Tm
+1 0 0 1 54.00 101.89 Tm
 (La logica apunta a asociar usuarios a una unidad familiar o pareja y permitir la) Tj
 ET
 BT
 /F1 10.5 Tf
-1 0 0 1 54.00 93.89 Tm
+1 0 0 1 54.00 87.89 Tm
 (administracion de su perfil principal.) Tj
 ET
 BT
@@ -611,7 +616,7 @@ endobj
 << /Type /Page /Parent 2 0 R /MediaBox [0 0 595.28 841.89] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents 9 0 R >>
 endobj
 11 0 obj
-<< /Length 3747 >>
+<< /Length 3713 >>
 stream
 BT
 /F1 10.5 Tf
@@ -651,7 +656,7 @@ ET
 BT
 /F1 10.5 Tf
 1 0 0 1 54.00 653.89 Tm
-(- Envia una imagen o PDF a Gemini para extraer gastos en JSON.) Tj
+(- Envia una imagen o PDF a OpenAI para extraer gastos en JSON.) Tj
 ET
 BT
 /F1 10.5 Tf
@@ -681,12 +686,12 @@ ET
 BT
 /F1 10.5 Tf
 1 0 0 1 54.00 529.89 Tm
-(El chatbot utiliza Gemini con declaraciones de funciones para consultar o modificar datos) Tj
+(El chatbot utiliza OpenAI Responses API con llamadas a funciones controladas por backend.) Tj
 ET
 BT
 /F1 10.5 Tf
 1 0 0 1 54.00 515.89 Tm
-(bajo demanda. Las herramientas definidas actualmente permiten:) Tj
+(Las herramientas definidas actualmente permiten:) Tj
 ET
 BT
 /F1 10.5 Tf
@@ -701,7 +706,7 @@ ET
 BT
 /F1 10.5 Tf
 1 0 0 1 54.00 465.89 Tm
-(- actualizar la categoria de un gasto.) Tj
+(- consultar presupuestos y flujo de caja.) Tj
 ET
 BT
 /F1 10.5 Tf
@@ -796,12 +801,12 @@ ET
 BT
 /F1 10.5 Tf
 1 0 0 1 54.00 119.89 Tm
-(- `.env.example` no documenta `GEMINI_API_KEY`, aunque el codigo si la exige para) Tj
+(- Los modulos de IA ya dependen de `OPENAI_API_KEY` y modelos configurables por) Tj
 ET
 BT
 /F1 10.5 Tf
 1 0 0 1 72.00 105.89 Tm
-(`AIModule` y `ChatbotModule`.) Tj
+(entorno.) Tj
 ET
 BT
 /F1 9 Tf
@@ -904,17 +909,17 @@ xref
 0000000142 00000 n 
 0000000212 00000 n 
 0000000287 00000 n 
-0000004205 00000 n 
-0000004347 00000 n 
-0000007683 00000 n 
-0000007825 00000 n 
-0000010790 00000 n 
-0000010933 00000 n 
-0000014733 00000 n 
-0000014877 00000 n 
-0000016501 00000 n 
+0000004191 00000 n 
+0000004333 00000 n 
+0000007678 00000 n 
+0000007820 00000 n 
+0000010785 00000 n 
+0000010928 00000 n 
+0000014694 00000 n 
+0000014838 00000 n 
+0000016462 00000 n 
 trailer
 << /Size 15 /Root 1 0 R >>
 startxref
-16645
+16606
 %%EOF

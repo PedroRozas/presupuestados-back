@@ -1087,7 +1087,7 @@ No invoca RPCs. Sin cambios.
 
 | Acción anterior | Nuevo endpoint |
 |---|---|
-| Edge Function `gemini-ai` (multipart) | `POST /ai/process-statement` |
+| Edge Function legacy (multipart) | `POST /ai/process-statement` |
 | `supabase.from('expenses').insert(items[])` | `POST /expenses` (uno por uno, o usar batch_id) |
 
 **Nota:** El nuevo endpoint `/ai/process-statement` ya inserta los gastos en la BD

@@ -16,7 +16,7 @@ La aplicacion usa Supabase como plataforma principal de datos y autenticacion. E
 - Base de datos y auth: Supabase
 - Documentacion de API: Swagger en `/api`
 - Validacion de entrada: `class-validator` y `ValidationPipe`
-- IA generativa: Google Gemini mediante `@google/genai`
+- IA generativa: OpenAI mediante `openai`
 - Carga de archivos: `multer`
 
 ## Arquitectura general
@@ -49,13 +49,14 @@ El proyecto sigue una arquitectura modular de NestJS. `AppModule` integra los mo
 
 `SupabaseService` crea un cliente tipado usando `database.types.ts`. La intencion del proyecto es concentrar toda la logica de negocio en el backend y evitar que el frontend consuma la base de datos directamente.
 
-Variables de entorno detectadas:
+Variables de entorno principales:
 
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_KEY`
 - `PORT`
-
-Ademas, los modulos de IA requieren `GEMINI_API_KEY`, aunque esa variable no aparece en `.env.example`.
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
+- `OPENAI_CHATBOT_MODEL`
 
 ## Funcionalidades implementadas
 
@@ -145,7 +146,7 @@ Flujo identificado:
 - Verifica que el usuario sea premium.
 - Obtiene `couple_id` y el `family_member` asociado.
 - Consulta categorias desde la base.
-- Envia una imagen o PDF a Gemini para extraer gastos en JSON.
+- Envia una imagen o PDF a OpenAI para extraer gastos en JSON.
 - Inserta el resultado como lote en la tabla `expenses`.
 
 Esta funcionalidad permite acelerar el ingreso de gastos desde documentos bancarios.
@@ -156,11 +157,11 @@ Endpoint detectado:
 
 - `POST /chatbot/chat`
 
-El chatbot utiliza Gemini con declaraciones de funciones para consultar o modificar datos bajo demanda. Las herramientas definidas actualmente permiten:
+El chatbot utiliza OpenAI Responses API con llamadas a funciones controladas por backend. Las herramientas definidas actualmente permiten:
 
 - obtener gastos mensuales,
 - obtener ingresos mensuales,
-- actualizar la categoria de un gasto.
+- consultar presupuestos y flujo de caja.
 
 El enfoque reduce la necesidad de cargar toda la informacion financiera en el prompt inicial y delega consultas puntuales a servicios internos.
 
@@ -177,7 +178,7 @@ El enfoque reduce la necesidad de cargar toda la informacion financiera en el pr
 - La API esta pensada como fachada completa sobre Supabase para que el frontend no interactue directamente con la base.
 - El dominio del sistema esta claramente orientado a finanzas compartidas: pareja, miembros del hogar, prorrateo y control de presupuesto.
 - Hay una combinacion de capacidades transaccionales clasicas y funciones premium apoyadas por IA.
-- `.env.example` no documenta `GEMINI_API_KEY`, aunque el codigo si la exige para `AIModule` y `ChatbotModule`.
+- Los modulos de IA ya dependen de `OPENAI_API_KEY` y modelos configurables por entorno.
 
 ## Posibles mejoras
 

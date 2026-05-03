@@ -9,11 +9,12 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { AuthGuard, AuthenticatedUser } from '../common/guards/auth.guard';
-import { AIService } from './ai.service';
-import type { UploadedFile as AIUploadedFile } from './ai.service';
-import { ProcessStatementDto } from './dto/process-statement.dto';
+import { AuthGuard, AuthenticatedUser } from '../common/guards/auth.guard.js';
+import { AIService } from './ai.service.js';
+import type { UploadedFile as AIUploadedFile } from './ai.service.js';
+import { ProcessStatementDto } from './dto/process-statement.dto.js';
 import { Request } from 'express';
+import { RateLimit } from '../security/decorators/rate-limit.decorator.js';
 
 @Controller('ai')
 @UseGuards(AuthGuard)
@@ -21,6 +22,7 @@ export class AIController {
   constructor(private readonly aiService: AIService) {}
 
   @Post('process-statement')
+  @RateLimit('ai')
   @UseInterceptors(
     FileInterceptor('file', {
       limits: { fileSize: 10 * 1024 * 1024 }, // 10 MB
