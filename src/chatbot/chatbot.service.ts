@@ -178,7 +178,7 @@ export class ChatbotService {
       const calls = this.extractFunctionCalls(response);
       if (calls.length === 0) break;
 
-      input.push(...response.output);
+      input.push(...calls);
 
       for (const call of calls) {
         const toolStartedAt = Date.now();
@@ -388,7 +388,12 @@ export class ChatbotService {
         );
       }
       case 'search_monthly_expenses': {
-        const monthArgs = this.validateMonthArgs(args);
+        const monthArgs = this.validateMonthArgs(args, true, [
+          'limit',
+          'categoryName',
+          'query',
+          'splitMethod',
+        ]);
         const limit = this.validateLimit(args['limit'], 20, 30);
         return this.expensesService.searchMonthlyExpenses(
           coupleId,
@@ -405,7 +410,7 @@ export class ChatbotService {
         );
       }
       case 'get_largest_expenses': {
-        const monthArgs = this.validateMonthArgs(args);
+        const monthArgs = this.validateMonthArgs(args, true, ['limit']);
         return this.expensesService.getLargestExpenses(
           coupleId,
           monthArgs.year,
@@ -416,7 +421,7 @@ export class ChatbotService {
         );
       }
       case 'get_category_breakdown': {
-        const monthArgs = this.validateMonthArgs(args);
+        const monthArgs = this.validateMonthArgs(args, true, ['limit']);
         return this.expensesService.getCategoryBreakdown(
           coupleId,
           monthArgs.year,
@@ -494,10 +499,13 @@ export class ChatbotService {
   private validateMonthArgs(
     args: Record<string, unknown>,
     includeScope = true,
+    extraAllowed: string[] = [],
   ) {
     this.assertAllowedProperties(
       args,
-      includeScope ? ['year', 'month', 'scope'] : ['year', 'month'],
+      includeScope
+        ? ['year', 'month', 'scope', ...extraAllowed]
+        : ['year', 'month', ...extraAllowed],
     );
     const period = this.validateYearMonth(args['year'], args['month']);
     return {
