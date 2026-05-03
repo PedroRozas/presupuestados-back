@@ -1,10 +1,10 @@
-import { IsEmail, IsOptional, IsString } from 'class-validator'
+import { IsEmail, IsOptional, IsString } from 'class-validator';
 
 export class ForgotPasswordDto {
   @IsEmail()
-  email!: string
+  email!: string;
 
   @IsOptional()
   @IsString()
-  redirect_to?: string
+  redirect_to?: string;
 }

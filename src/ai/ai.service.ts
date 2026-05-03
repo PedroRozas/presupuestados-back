@@ -1,5 +1,4 @@
 import {
-  ForbiddenException,
   Inject,
   Injectable,
   InternalServerErrorException,
@@ -14,6 +13,7 @@ import { DRIZZLE } from '../database/database.module.js';
 import * as schema from '../database/schema/index.js';
 import { profiles, expenseCategories } from '../database/schema/index.js';
 import { ProcessStatementDto } from './dto/process-statement.dto.js';
+import { AIUsageService } from '../ai-usage/ai-usage.service.js';
 
 export interface UploadedFile {
   mimetype: string;
@@ -43,6 +43,7 @@ export class AIService {
   constructor(
     @Inject(DRIZZLE) private readonly db: NodePgDatabase<typeof schema>,
     private readonly configService: ConfigService,
+    private readonly aiUsageService: AIUsageService,
   ) {
     const apiKey = this.configService.get<string>('OPENAI_API_KEY');
     if (!apiKey) {
@@ -58,7 +59,7 @@ export class AIService {
     file: UploadedFile,
     dto: ProcessStatementDto,
   ) {
-    // 1. Verificación Premium. Esta función no requiere pareja: solo previsualiza gastos.
+    // 1. Obtener perfil. Esta función no requiere pareja: solo previsualiza gastos.
     const profileResult = await this.db
       .select({
         isPremium: profiles.isPremium,
@@ -73,9 +74,6 @@ export class AIService {
       throw new InternalServerErrorException(
         'Error al obtener perfil del usuario',
       );
-    }
-    if (!profile.isPremium) {
-      throw new ForbiddenException('Esta función requiere suscripción premium');
     }
 
     // 2. Obtener las categorías de la BD
@@ -93,6 +91,12 @@ export class AIService {
     const targetDate = this.getTargetDate(dto);
     const fileContent = this.buildFileContent(file, base64Data);
     const promptText = this.buildStatementPrompt(targetDate, categoriesContext);
+
+    const usage = await this.aiUsageService.reserveUsage(
+      userId,
+      'statement_scan',
+      Boolean(profile.isPremium),
+    );
 
     let responseText: string;
     try {
@@ -171,6 +175,13 @@ export class AIService {
 
       responseText = response.output_text;
     } catch (e: unknown) {
+      if (!usage.isPremium) {
+        await this.aiUsageService.refundUsage(
+          userId,
+          'statement_scan',
+          usage.periodMonth,
+        );
+      }
       const errorMessage = e instanceof Error ? e.message : String(e);
       throw new InternalServerErrorException(
         `Error contactando OpenAI: ${errorMessage}`,
@@ -182,6 +193,13 @@ export class AIService {
       if (!responseText) throw new Error('La IA devolvió una respuesta vacía');
       parsedData = JSON.parse(responseText) as ExtractedStatementResponse;
     } catch {
+      if (!usage.isPremium) {
+        await this.aiUsageService.refundUsage(
+          userId,
+          'statement_scan',
+          usage.periodMonth,
+        );
+      }
       this.logger.error(`Error parseando JSON de OpenAI: ${responseText}`);
       throw new InternalServerErrorException(
         'Error procesando el resultado de la IA',
@@ -196,11 +214,12 @@ export class AIService {
     );
 
     if (normalizedExpenses.length === 0) {
-      return { msg: 'No se extrajeron gastos', expenses: [] };
+      return { msg: 'No se extrajeron gastos', expenses: [], usage };
     }
 
     return {
       expenses: normalizedExpenses,
+      usage,
     };
   }
 

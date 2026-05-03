@@ -36,8 +36,10 @@ const COOKIE_OPTIONS: CookieOptions = {
 
 type CookieRequest = Request & { cookies?: Record<string, string> };
 
-const getCookie = (req: Request, name: string): string | undefined =>
-  (req as CookieRequest).cookies?.[name];
+const getCookie = (req: Request, name: string): string | undefined => {
+  const value = (req as CookieRequest).cookies?.[name] as unknown;
+  return typeof value === 'string' ? value : undefined;
+};
 
 const getBearerToken = (req: Request): string | undefined => {
   const authHeader = req.headers['authorization'];

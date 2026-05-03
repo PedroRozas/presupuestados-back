@@ -43,8 +43,12 @@ export class AuthGuard implements CanActivate {
       throw new UnauthorizedException('Token inválido o expirado');
     }
 
-    const name = data.user.user_metadata?.['name'];
-    const fullName = data.user.user_metadata?.['full_name'];
+    const metadata = data.user.user_metadata as
+      | Record<string, unknown>
+      | null
+      | undefined;
+    const name = metadata?.['name'];
+    const fullName = metadata?.['full_name'];
 
     (request as Request & { user: AuthenticatedUser }).user = {
       id: data.user.id,
@@ -63,8 +67,10 @@ export class AuthGuard implements CanActivate {
     const headerToken = this.extractBearerToken(authHeader);
     if (headerToken) return headerToken;
 
-    return (request as Request & { cookies?: Record<string, string> })
-      .cookies?.['access_token'];
+    const cookieToken = (
+      request as Request & { cookies?: Record<string, string> }
+    ).cookies?.['access_token'] as unknown;
+    return typeof cookieToken === 'string' ? cookieToken : undefined;
   }
 
   private extractBearerToken(

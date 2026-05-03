@@ -8,6 +8,13 @@
       "when": 1774401391152,
       "tag": "0000_add_performance_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1777819679564,
+      "tag": "0001_brown_professor_monster",
+      "breakpoints": true
     }
   ]
 }

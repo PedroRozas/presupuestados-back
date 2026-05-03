@@ -9,14 +9,14 @@ import {
   Query,
   Req,
   UseGuards,
-} from '@nestjs/common'
-import { Request } from 'express'
-import { AuthGuard, AuthenticatedUser } from '../common/guards/auth.guard.js'
-import { BudgetsService } from './budgets.service.js'
-import { CreateBudgetDto } from './dto/create-budget.dto.js'
-import { UpdateBudgetDto } from './dto/update-budget.dto.js'
-import { CoupleContextService } from '../common/services/couple-context.service.js'
-import { MonthYearQueryDto } from '../common/dto/month-year-query.dto.js'
+} from '@nestjs/common';
+import { Request } from 'express';
+import { AuthGuard, AuthenticatedUser } from '../common/guards/auth.guard.js';
+import { BudgetsService } from './budgets.service.js';
+import { CreateBudgetDto } from './dto/create-budget.dto.js';
+import { UpdateBudgetDto } from './dto/update-budget.dto.js';
+import { CoupleContextService } from '../common/services/couple-context.service.js';
+import { MonthYearQueryDto } from '../common/dto/month-year-query.dto.js';
 
 @Controller('budgets')
 @UseGuards(AuthGuard)
@@ -62,8 +62,10 @@ export class BudgetsController {
     @Param('id') id: string,
     @Req() req: Request & { user: AuthenticatedUser },
   ) {
-    const coupleId = await this.coupleContextService.getCoupleIdOrThrow(req.user.id)
-    return this.budgetsService.deleteBudget(coupleId, id)
+    const coupleId = await this.coupleContextService.getCoupleIdOrThrow(
+      req.user.id,
+    );
+    return this.budgetsService.deleteBudget(coupleId, id);
   }
 
   @Get(':id/summary')
@@ -72,7 +74,14 @@ export class BudgetsController {
     @Query() query: MonthYearQueryDto,
     @Req() req: Request & { user: AuthenticatedUser },
   ) {
-    const coupleId = await this.coupleContextService.getCoupleIdOrThrow(req.user.id)
-    return this.budgetsService.getBudgetSummary(coupleId, id, query.month, query.year)
+    const coupleId = await this.coupleContextService.getCoupleIdOrThrow(
+      req.user.id,
+    );
+    return this.budgetsService.getBudgetSummary(
+      coupleId,
+      id,
+      query.month,
+      query.year,
+    );
   }
 }

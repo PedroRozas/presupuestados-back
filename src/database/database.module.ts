@@ -1,10 +1,10 @@
-import { Module, Global } from '@nestjs/common'
-import { ConfigModule, ConfigService } from '@nestjs/config'
-import { drizzle } from 'drizzle-orm/node-postgres'
-import { Pool } from 'pg'
-import * as schema from './schema/index.js'
+import { Module, Global } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { drizzle } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
+import * as schema from './schema/index.js';
 
-export const DRIZZLE = Symbol('DRIZZLE')
+export const DRIZZLE = Symbol('DRIZZLE');
 
 @Global()
 @Module({
@@ -14,9 +14,9 @@ export const DRIZZLE = Symbol('DRIZZLE')
       provide: DRIZZLE,
       inject: [ConfigService],
       useFactory: (config: ConfigService) => {
-        const connectionString = config.getOrThrow<string>('DATABASE_URL')
-        const pool = new Pool({ connectionString })
-        return drizzle(pool, { schema })
+        const connectionString = config.getOrThrow<string>('DATABASE_URL');
+        const pool = new Pool({ connectionString });
+        return drizzle(pool, { schema });
       },
     },
   ],

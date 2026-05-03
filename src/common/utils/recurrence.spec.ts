@@ -2,21 +2,21 @@ import {
   filterExpensesForMonth,
   getPreviousMonthEndDate,
   normalizeRecurrenceInterval,
-} from './recurrence'
+} from './recurrence';
 
 describe('recurrence utils', () => {
   it('normalizes annual to yearly', () => {
-    expect(normalizeRecurrenceInterval('annual')).toBe('yearly')
-    expect(normalizeRecurrenceInterval('yearly')).toBe('yearly')
-  })
+    expect(normalizeRecurrenceInterval('annual')).toBe('yearly');
+    expect(normalizeRecurrenceInterval('yearly')).toBe('yearly');
+  });
 
   it('calculates the last day of the previous month from the new start date', () => {
-    const cutoffDate = getPreviousMonthEndDate('2026-03-31T15:00:00.000Z')
+    const cutoffDate = getPreviousMonthEndDate('2026-03-31T15:00:00.000Z');
 
-    expect(cutoffDate.getFullYear()).toBe(2026)
-    expect(cutoffDate.getMonth()).toBe(1)
-    expect(cutoffDate.getDate()).toBe(28)
-  })
+    expect(cutoffDate.getFullYear()).toBe(2026);
+    expect(cutoffDate.getMonth()).toBe(1);
+    expect(cutoffDate.getDate()).toBe(28);
+  });
 
   it('keeps a recurring expense active in april after editing it on march 31', () => {
     const expenses = [
@@ -32,14 +32,14 @@ describe('recurrence utils', () => {
         recurrenceInterval: 'monthly',
         recurrenceEndDate: null,
       },
-    ]
+    ];
 
-    expect(filterExpensesForMonth(expenses, 3, 2026)).toHaveLength(1)
-    expect(filterExpensesForMonth(expenses, 4, 2026)).toHaveLength(1)
+    expect(filterExpensesForMonth(expenses, 3, 2026)).toHaveLength(1);
+    expect(filterExpensesForMonth(expenses, 4, 2026)).toHaveLength(1);
     expect(filterExpensesForMonth(expenses, 4, 2026)[0]?.date).toBe(
       '2026-03-31T15:00:00.000Z',
-    )
-  })
+    );
+  });
 
   it('supports weekly and yearly intervals in monthly projections', () => {
     const expenses = [
@@ -55,8 +55,8 @@ describe('recurrence utils', () => {
         recurrenceInterval: 'annual',
         recurrenceEndDate: null,
       },
-    ]
+    ];
 
-    expect(filterExpensesForMonth(expenses, 4, 2026)).toHaveLength(2)
-  })
-})
+    expect(filterExpensesForMonth(expenses, 4, 2026)).toHaveLength(2);
+  });
+});

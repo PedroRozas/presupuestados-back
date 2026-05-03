@@ -4,16 +4,16 @@ import {
   Injectable,
   InternalServerErrorException,
   NotFoundException,
-} from '@nestjs/common'
-import { NodePgDatabase } from 'drizzle-orm/node-postgres'
-import { eq, and, desc } from 'drizzle-orm'
-import { randomUUID } from 'crypto'
-import { DRIZZLE } from '../database/database.module.js'
-import * as schema from '../database/schema/index.js'
-import { budgets, expenses } from '../database/schema/index.js'
-import { CreateBudgetDto, BudgetType } from './dto/create-budget.dto.js'
-import { UpdateBudgetDto } from './dto/update-budget.dto.js'
-import { filterExpensesForMonth } from '../common/utils/recurrence.js'
+} from '@nestjs/common';
+import { NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { eq, and, desc } from 'drizzle-orm';
+import { randomUUID } from 'crypto';
+import { DRIZZLE } from '../database/database.module.js';
+import * as schema from '../database/schema/index.js';
+import { budgets, expenses } from '../database/schema/index.js';
+import { CreateBudgetDto, BudgetType } from './dto/create-budget.dto.js';
+import { UpdateBudgetDto } from './dto/update-budget.dto.js';
+import { filterExpensesForMonth } from '../common/utils/recurrence.js';
 
 @Injectable()
 export class BudgetsService {
@@ -29,7 +29,7 @@ export class BudgetsService {
       .select()
       .from(budgets)
       .where(eq(budgets.coupleId, coupleId))
-      .orderBy(desc(budgets.createdAt))
+      .orderBy(desc(budgets.createdAt));
   }
 
   /**
@@ -37,13 +37,13 @@ export class BudgetsService {
    */
   async createBudget(coupleId: string, ownerId: string, dto: CreateBudgetDto) {
     if (!Object.values(BudgetType).includes(dto.type)) {
-      throw new BadRequestException('Tipo de presupuesto inválido')
+      throw new BadRequestException('Tipo de presupuesto inválido');
     }
 
     if (dto.type === BudgetType.INDIVIDUAL && !dto.user_id) {
       throw new BadRequestException(
         'Presupuestos individuales requieren user_id',
-      )
+      );
     }
 
     const inserted = await this.db
@@ -59,13 +59,13 @@ export class BudgetsService {
         associatedCard: dto.associated_card ?? null,
         defaultSplitMethod: dto.default_split_method ?? null,
       })
-      .returning()
+      .returning();
 
     if (!inserted[0]) {
-      throw new InternalServerErrorException('Error al crear presupuesto')
+      throw new InternalServerErrorException('Error al crear presupuesto');
     }
 
-    return inserted[0]
+    return inserted[0];
   }
 
   /**
@@ -76,46 +76,46 @@ export class BudgetsService {
       .select({ coupleId: budgets.coupleId })
       .from(budgets)
       .where(eq(budgets.id, id))
-      .limit(1)
+      .limit(1);
 
-    const existing = existingResult[0]
+    const existing = existingResult[0];
     if (!existing) {
-      throw new NotFoundException('Presupuesto no encontrado')
+      throw new NotFoundException('Presupuesto no encontrado');
     }
 
     if (existing.coupleId !== coupleId) {
       throw new BadRequestException(
         'No tienes permiso para modificar este presupuesto',
-      )
+      );
     }
 
     if (dto.type === BudgetType.INDIVIDUAL && !dto.user_id) {
       throw new BadRequestException(
         'Presupuestos individuales requieren user_id',
-      )
+      );
     }
 
-    const updatePayload: Partial<schema.NewBudget> = {}
-    if (dto.name !== undefined) updatePayload.name = dto.name
-    if (dto.type !== undefined) updatePayload.type = dto.type
-    if (dto.limit !== undefined) updatePayload.limit = String(dto.limit)
-    if (dto.user_id !== undefined) updatePayload.userId = dto.user_id
+    const updatePayload: Partial<schema.NewBudget> = {};
+    if (dto.name !== undefined) updatePayload.name = dto.name;
+    if (dto.type !== undefined) updatePayload.type = dto.type;
+    if (dto.limit !== undefined) updatePayload.limit = String(dto.limit);
+    if (dto.user_id !== undefined) updatePayload.userId = dto.user_id;
     if (dto.associated_card !== undefined)
-      updatePayload.associatedCard = dto.associated_card
+      updatePayload.associatedCard = dto.associated_card;
     if (dto.default_split_method !== undefined)
-      updatePayload.defaultSplitMethod = dto.default_split_method
+      updatePayload.defaultSplitMethod = dto.default_split_method;
 
     const updated = await this.db
       .update(budgets)
       .set(updatePayload)
       .where(eq(budgets.id, id))
-      .returning()
+      .returning();
 
     if (!updated[0]) {
-      throw new InternalServerErrorException('Error al actualizar presupuesto')
+      throw new InternalServerErrorException('Error al actualizar presupuesto');
     }
 
-    return updated[0]
+    return updated[0];
   }
 
   /**
@@ -127,29 +127,29 @@ export class BudgetsService {
       .select({ coupleId: budgets.coupleId })
       .from(budgets)
       .where(eq(budgets.id, id))
-      .limit(1)
+      .limit(1);
 
-    const budget = budgetResult[0]
+    const budget = budgetResult[0];
     if (!budget) {
-      throw new NotFoundException('Presupuesto no encontrado')
+      throw new NotFoundException('Presupuesto no encontrado');
     }
 
     if (budget.coupleId !== coupleId) {
       throw new BadRequestException(
         'No tienes permiso para eliminar este presupuesto',
-      )
+      );
     }
 
     await this.db.transaction(async (tx) => {
       await tx
         .update(expenses)
         .set({ budgetId: null })
-        .where(eq(expenses.budgetId, id))
+        .where(eq(expenses.budgetId, id));
 
-      await tx.delete(budgets).where(eq(budgets.id, id))
-    })
+      await tx.delete(budgets).where(eq(budgets.id, id));
+    });
 
-    return { deleted: true, id }
+    return { deleted: true, id };
   }
 
   /**
@@ -177,30 +177,32 @@ export class BudgetsService {
         .select()
         .from(expenses)
         .where(
-          and(
-            eq(expenses.budgetId, budgetId),
-            eq(expenses.coupleId, coupleId),
-          ),
+          and(eq(expenses.budgetId, budgetId), eq(expenses.coupleId, coupleId)),
         ),
-    ])
+    ]);
 
-    const budget = budgetResult[0]
-    if (!budget) throw new NotFoundException('Presupuesto no encontrado')
+    const budget = budgetResult[0];
+    if (!budget) throw new NotFoundException('Presupuesto no encontrado');
 
-    const budgetExpenses = filterExpensesForMonth(allBudgetExpenses, month, year)
+    const budgetExpenses = filterExpensesForMonth(
+      allBudgetExpenses,
+      month,
+      year,
+    );
 
-    const limit = Number(budget.limit)
-    const totalSpent = budgetExpenses.reduce((s, e) => s + Number(e.amount), 0)
-    const remaining = Math.max(0, limit - totalSpent)
-    const percentage = limit > 0 ? Math.min(100, (totalSpent / limit) * 100) : 0
+    const limit = Number(budget.limit);
+    const totalSpent = budgetExpenses.reduce((s, e) => s + Number(e.amount), 0);
+    const remaining = Math.max(0, limit - totalSpent);
+    const percentage =
+      limit > 0 ? Math.min(100, (totalSpent / limit) * 100) : 0;
 
-    const today = new Date()
+    const today = new Date();
     const isCurrentMonth =
-      today.getFullYear() === year && today.getMonth() + 1 === month
-    const daysInMonth = new Date(year, month, 0).getDate()
-    const daysPassed = isCurrentMonth ? today.getDate() : daysInMonth
-    const dailyAverage = daysPassed > 0 ? totalSpent / daysPassed : 0
-    const projectedSpend = dailyAverage * daysInMonth
+      today.getFullYear() === year && today.getMonth() + 1 === month;
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const daysPassed = isCurrentMonth ? today.getDate() : daysInMonth;
+    const dailyAverage = daysPassed > 0 ? totalSpent / daysPassed : 0;
+    const projectedSpend = dailyAverage * daysInMonth;
 
     return {
       budgetId: budget.id,
@@ -213,6 +215,6 @@ export class BudgetsService {
       dailyAverage: Math.round(dailyAverage),
       projectedSpend: Math.round(projectedSpend),
       expensesCount: budgetExpenses.length,
-    }
+    };
   }
 }

@@ -1,5 +1,10 @@
 import { Type } from 'class-transformer';
-import { IsDateString, IsOptional, IsUUID, ValidateNested } from 'class-validator';
+import {
+  IsDateString,
+  IsOptional,
+  IsUUID,
+  ValidateNested,
+} from 'class-validator';
 import { CreateExpenseDto } from './create-expense.dto.js';
 
 export class UpdateRecurringExpenseDto {
