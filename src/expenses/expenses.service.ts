@@ -4,6 +4,7 @@ import {
   NotFoundException,
   InternalServerErrorException,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { eq, and, inArray, desc, gte, lte, isNull, or } from 'drizzle-orm';
 import { DRIZZLE } from '../database/database.module.js';
@@ -209,6 +210,7 @@ export class ExpensesService {
 
     const newExpenseDto = updateRecurringDto.p_new_expense;
     const newExpenseDate = new Date(newExpenseDto.p_date);
+    const newExpenseId = randomUUID();
     const cutoffDate = getPreviousMonthEndDate(newExpenseDate);
     const recurrenceInterval = normalizeRecurrenceInterval(
       newExpenseDto.p_recurrence_interval ?? currentExpense.recurrenceInterval,
@@ -228,7 +230,7 @@ export class ExpensesService {
     const inserted = await this.db
       .insert(expenses)
       .values({
-        id: newExpenseDto.p_expense_id,
+        id: newExpenseId,
         amount: String(newExpenseDto.p_amount),
         assignedUserId: newExpenseDto.p_assigned_user_id ?? null,
         batchId: newExpenseDto.p_batch_id ?? null,
@@ -304,17 +306,35 @@ export class ExpensesService {
       const startDate = new Date(year, month - 1, 1);
       const endDate = new Date(year, month, 0, 23, 59, 59, 999);
 
-      return this.db
+      const expenseCandidates = await this.db
         .select()
         .from(expenses)
         .where(
           and(
             eq(expenses.coupleId, coupleId),
-            gte(expenses.date, startDate),
-            lte(expenses.date, endDate),
+            or(
+              and(
+                or(
+                  eq(expenses.isRecurring, false),
+                  isNull(expenses.isRecurring),
+                ),
+                gte(expenses.date, startDate),
+                lte(expenses.date, endDate),
+              ),
+              and(
+                eq(expenses.isRecurring, true),
+                lte(expenses.date, endDate),
+                or(
+                  isNull(expenses.recurrenceEndDate),
+                  gte(expenses.recurrenceEndDate, startDate),
+                ),
+              ),
+            ),
           ),
         )
         .orderBy(desc(expenses.date));
+
+      return filterExpensesForMonth(expenseCandidates, month, year);
     }
 
     return this.db
