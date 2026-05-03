@@ -12,3 +12,13 @@ export interface AIUsageStatusItem {
 }
 
 export type AIUsageStatusResponse = Record<AIUsageFeature, AIUsageStatusItem>;
+
+export type AIUsagePublicStatusItem = Omit<
+  AIUsageStatusItem,
+  'feature' | 'periodMonth'
+>;
+
+export type AIUsagePublicStatusResponse = Record<
+  AIUsageFeature,
+  AIUsagePublicStatusItem
+>;

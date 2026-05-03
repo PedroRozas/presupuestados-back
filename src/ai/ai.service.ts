@@ -214,12 +214,16 @@ export class AIService {
     );
 
     if (normalizedExpenses.length === 0) {
-      return { msg: 'No se extrajeron gastos', expenses: [], usage };
+      return {
+        msg: 'No se extrajeron gastos',
+        expenses: [],
+        usage: this.aiUsageService.toPublicStatusItem(usage),
+      };
     }
 
     return {
       expenses: normalizedExpenses,
-      usage,
+      usage: this.aiUsageService.toPublicStatusItem(usage),
     };
   }
 

@@ -10,6 +10,6 @@ export class AIUsageController {
 
   @Get('status')
   getStatus(@Req() req: Request & { user: AuthenticatedUser }) {
-    return this.aiUsageService.getStatusForUser(req.user.id);
+    return this.aiUsageService.getPublicStatusForUser(req.user.id);
   }
 }

@@ -5,7 +5,7 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { eq, and, inArray, desc, gte, lte } from 'drizzle-orm';
+import { eq, and, inArray, desc, gte, lte, isNull, or } from 'drizzle-orm';
 import { DRIZZLE } from '../database/database.module.js';
 import * as schema from '../database/schema/index.js';
 import {
@@ -23,6 +23,7 @@ import { StopRecurringExpenseDto } from './dto/stop-recurring-expense.dto.js';
 import { DeleteExpensesBatchDto } from './dto/delete-expenses-batch.dto.js';
 import {
   getPreviousMonthEndDate,
+  filterExpensesForMonth,
   normalizeRecurrenceInterval,
 } from '../common/utils/recurrence.js';
 import { CoupleContextService } from '../common/services/couple-context.service.js';
@@ -745,45 +746,97 @@ export class ExpensesService {
     currentMemberId: string | null,
     scope: 'couple' | 'current_user' = 'couple',
   ) {
-    const [incomeSummary, expenseSummary] = await Promise.all([
+    const [incomeSummary, monthlyExpenses] = await Promise.all([
       this.getIncomeSummary(coupleId),
-      this.getMonthlyExpenseSummary(
-        coupleId,
-        year,
-        month,
-        currentMemberId,
-        scope,
-      ),
+      this.getSanitizedMonthlyExpenses(coupleId, year, month),
     ]);
     const currentMemberRef = currentMemberId
       ? await this.getMemberRef(coupleId, currentMemberId)
       : null;
 
-    const selectedMembers =
+    const splitRatios = new Map(
+      incomeSummary.members.map((member) => [
+        member.memberRef,
+        incomeSummary.totalNetIncome > 0
+          ? member.netIncome / incomeSummary.totalNetIncome
+          : 0.5,
+      ]),
+    );
+
+    const memberCashflows = incomeSummary.members.map((member) => {
+      let shareOfJointExpenses = 0;
+      let individualExpenses = 0;
+
+      for (const expense of monthlyExpenses) {
+        const amount = expense.isCredit ? -expense.amount : expense.amount;
+
+        if (expense.splitMethod === 'individual') {
+          if (expense.assignedToRef === member.memberRef) {
+            individualExpenses += amount;
+          }
+          continue;
+        }
+
+        if (expense.splitMethod === 'proportional') {
+          shareOfJointExpenses +=
+            amount * (splitRatios.get(member.memberRef) ?? 0.5);
+        } else {
+          shareOfJointExpenses += amount / 2;
+        }
+      }
+
+      const netExpenses = shareOfJointExpenses + individualExpenses;
+
+      return {
+        memberRef: member.memberRef,
+        memberName: member.memberName,
+        netIncome: member.netIncome,
+        incomeSharePercent:
+          incomeSummary.totalNetIncome > 0
+            ? Math.round(
+                (member.netIncome / incomeSummary.totalNetIncome) * 1000,
+              ) / 10
+            : 50,
+        shareOfJointExpenses: Math.round(shareOfJointExpenses),
+        individualExpenses: Math.round(individualExpenses),
+        netExpenses: Math.round(netExpenses),
+        estimatedRemainder: Math.round(member.netIncome - netExpenses),
+      };
+    });
+
+    const selectedCashflows =
       scope === 'current_user' && currentMemberId
-        ? incomeSummary.members.filter(
+        ? memberCashflows.filter(
             (member) => member.memberRef === currentMemberRef,
           )
-        : incomeSummary.members;
+        : memberCashflows;
 
-    const netIncome = selectedMembers.reduce(
+    const cashflows =
+      selectedCashflows.length > 0 ? selectedCashflows : memberCashflows;
+
+    const netIncome = cashflows.reduce(
       (sum, member) => sum + member.netIncome,
+      0,
+    );
+    const netExpenses = cashflows.reduce(
+      (sum, member) => sum + member.netExpenses,
       0,
     );
 
     return {
-      period: expenseSummary.period,
+      period: this.formatPeriod(year, month),
       scope,
       currency: 'CLP',
       netIncome,
-      netExpenses: expenseSummary.netExpenses,
-      estimatedRemainder: netIncome - expenseSummary.netExpenses,
-      incomeSummary:
-        scope === 'couple'
-          ? incomeSummary.members
-          : selectedMembers.length > 0
-            ? selectedMembers
-            : incomeSummary.members,
+      netExpenses,
+      estimatedRemainder: netIncome - netExpenses,
+      cashflowByMember: cashflows,
+      incomeSummary: cashflows.map((member) => ({
+        memberRef: member.memberRef,
+        memberName: member.memberName,
+        netIncome: member.netIncome,
+        incomeSharePercent: member.incomeSharePercent,
+      })),
     };
   }
 
@@ -840,39 +893,61 @@ export class ExpensesService {
     const startDate = new Date(year, month - 1, 1);
     const endDate = new Date(year, month, 0, 23, 59, 59, 999);
 
-    const [rows, categories, members, budgetRows] = await Promise.all([
-      this.db
-        .select({
-          amount: expenses.amount,
-          date: expenses.date,
-          description: expenses.description,
-          splitMethod: expenses.splitMethod,
-          paidBy: expenses.paidBy,
-          assignedUserId: expenses.assignedUserId,
-          budgetId: expenses.budgetId,
-          isCredit: expenses.isCredit,
-          categoryId: expenses.categoryId,
-        })
-        .from(expenses)
-        .where(
-          and(
-            eq(expenses.coupleId, coupleId),
-            gte(expenses.date, startDate),
-            lte(expenses.date, endDate),
-          ),
-        )
-        .orderBy(desc(expenses.date)),
-      this.db.select().from(expenseCategories),
-      this.db
-        .select({ id: familyMembers.id, name: familyMembers.name })
-        .from(familyMembers)
-        .where(eq(familyMembers.coupleId, coupleId)),
-      this.db
-        .select({ id: budgets.id, name: budgets.name })
-        .from(budgets)
-        .where(eq(budgets.coupleId, coupleId))
-        .orderBy(budgets.name),
-    ]);
+    const [expenseCandidates, categories, members, budgetRows] =
+      await Promise.all([
+        this.db
+          .select({
+            amount: expenses.amount,
+            date: expenses.date,
+            description: expenses.description,
+            isRecurring: expenses.isRecurring,
+            recurrenceInterval: expenses.recurrenceInterval,
+            recurrenceEndDate: expenses.recurrenceEndDate,
+            splitMethod: expenses.splitMethod,
+            paidBy: expenses.paidBy,
+            assignedUserId: expenses.assignedUserId,
+            budgetId: expenses.budgetId,
+            isCredit: expenses.isCredit,
+            categoryId: expenses.categoryId,
+          })
+          .from(expenses)
+          .where(
+            and(
+              eq(expenses.coupleId, coupleId),
+              or(
+                and(
+                  or(
+                    eq(expenses.isRecurring, false),
+                    isNull(expenses.isRecurring),
+                  ),
+                  gte(expenses.date, startDate),
+                  lte(expenses.date, endDate),
+                ),
+                and(
+                  eq(expenses.isRecurring, true),
+                  lte(expenses.date, endDate),
+                  or(
+                    isNull(expenses.recurrenceEndDate),
+                    gte(expenses.recurrenceEndDate, startDate),
+                  ),
+                ),
+              ),
+            ),
+          )
+          .orderBy(desc(expenses.date)),
+        this.db.select().from(expenseCategories),
+        this.db
+          .select({ id: familyMembers.id, name: familyMembers.name })
+          .from(familyMembers)
+          .where(eq(familyMembers.coupleId, coupleId)),
+        this.db
+          .select({ id: budgets.id, name: budgets.name })
+          .from(budgets)
+          .where(eq(budgets.coupleId, coupleId))
+          .orderBy(budgets.name),
+      ]);
+
+    const rows = filterExpensesForMonth(expenseCandidates, month, year);
 
     const categoryNames = new Map(
       categories.map((category) => [category.id, category.name]),

@@ -12,6 +12,8 @@ import { aiUsageMonthly, profiles } from '../database/schema/index.js';
 import { AI_USAGE_LIMITS } from './ai-usage.constants.js';
 import { AIUsageLimitReachedException } from './ai-usage-limit-reached.exception.js';
 import type {
+  AIUsagePublicStatusItem,
+  AIUsagePublicStatusResponse,
   AIUsageFeature,
   AIUsageStatusItem,
   AIUsageStatusResponse,
@@ -45,6 +47,30 @@ export class AIUsageService {
   async getStatusForUser(userId: string): Promise<AIUsageStatusResponse> {
     const profile = await this.getProfile(userId);
     return this.getStatusItems(userId, Boolean(profile.isPremium));
+  }
+
+  async getPublicStatusForUser(
+    userId: string,
+  ): Promise<AIUsagePublicStatusResponse> {
+    return this.toPublicStatusResponse(await this.getStatusForUser(userId));
+  }
+
+  toPublicStatusItem(item: AIUsageStatusItem): AIUsagePublicStatusItem {
+    return {
+      used: item.used,
+      limit: item.limit,
+      remaining: item.remaining,
+      isPremium: item.isPremium,
+    };
+  }
+
+  toPublicStatusResponse(
+    status: AIUsageStatusResponse,
+  ): AIUsagePublicStatusResponse {
+    return {
+      statement_scan: this.toPublicStatusItem(status.statement_scan),
+      chatbot_response: this.toPublicStatusItem(status.chatbot_response),
+    };
   }
 
   async reserveUsage(
