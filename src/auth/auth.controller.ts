@@ -21,6 +21,7 @@ import { RefreshDto } from './dto/refresh.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { ForgotPasswordDto } from './dto/forgot-password.dto.js';
 import { UpdatePasswordDto } from './dto/update-password.dto.js';
+import { ResendConfirmationDto } from './dto/resend-confirmation.dto.js';
 import { RateLimit } from '../security/decorators/rate-limit.decorator.js';
 
 const ACCESS_TOKEN_COOKIE = 'access_token';
@@ -182,6 +183,17 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   forgotPassword(@Body() dto: ForgotPasswordDto) {
     return this.authService.forgotPassword(dto);
+  }
+
+  /**
+   * POST /auth/resend-confirmation
+   * Reenvía el correo de confirmación si la cuenta sigue pendiente.
+   */
+  @Post('resend-confirmation')
+  @RateLimit('passwordReset')
+  @HttpCode(HttpStatus.OK)
+  resendConfirmation(@Body() dto: ResendConfirmationDto) {
+    return this.authService.resendConfirmation(dto);
   }
 
   /**

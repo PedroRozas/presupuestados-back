@@ -381,8 +381,11 @@ export class ExpensesService {
         member.memberRef,
         incomeSummary.totalNetIncome > 0
           ? member.netIncome / incomeSummary.totalNetIncome
-          : 0.5,
+          : 1 / this.getEqualSplitDivisor(incomeSummary.members.length),
       ]),
+    );
+    const equalSplitDivisor = this.getEqualSplitDivisor(
+      incomeSummary.members.length,
     );
     const currentMemberRef = currentMemberId
       ? await this.getMemberRef(coupleId, currentMemberId)
@@ -395,6 +398,7 @@ export class ExpensesService {
         scope,
         currentMemberRef,
         splitRatios,
+        equalSplitDivisor,
       ),
     }));
 
@@ -493,8 +497,11 @@ export class ExpensesService {
         member.memberRef,
         incomeSummary.totalNetIncome > 0
           ? member.netIncome / incomeSummary.totalNetIncome
-          : 0.5,
+          : 1 / this.getEqualSplitDivisor(incomeSummary.members.length),
       ]),
+    );
+    const equalSplitDivisor = this.getEqualSplitDivisor(
+      incomeSummary.members.length,
     );
     const categoryFilter = options.categoryName?.toLowerCase();
     const queryFilter = options.query?.toLowerCase();
@@ -507,6 +514,7 @@ export class ExpensesService {
           scope,
           currentMemberRef,
           splitRatios,
+          equalSplitDivisor,
         ),
       }))
       .filter((expense) => expense.scopedAmount > 0)
@@ -779,8 +787,11 @@ export class ExpensesService {
         member.memberRef,
         incomeSummary.totalNetIncome > 0
           ? member.netIncome / incomeSummary.totalNetIncome
-          : 0.5,
+          : 1 / this.getEqualSplitDivisor(incomeSummary.members.length),
       ]),
+    );
+    const equalSplitDivisor = this.getEqualSplitDivisor(
+      incomeSummary.members.length,
     );
 
     const memberCashflows = incomeSummary.members.map((member) => {
@@ -799,9 +810,10 @@ export class ExpensesService {
 
         if (expense.splitMethod === 'proportional') {
           shareOfJointExpenses +=
-            amount * (splitRatios.get(member.memberRef) ?? 0.5);
+            amount *
+            (splitRatios.get(member.memberRef) ?? 1 / equalSplitDivisor);
         } else {
-          shareOfJointExpenses += amount / 2;
+          shareOfJointExpenses += amount / equalSplitDivisor;
         }
       }
 
@@ -816,7 +828,7 @@ export class ExpensesService {
             ? Math.round(
                 (member.netIncome / incomeSummary.totalNetIncome) * 1000,
               ) / 10
-            : 50,
+            : Math.round(1000 / equalSplitDivisor) / 10,
         shareOfJointExpenses: Math.round(shareOfJointExpenses),
         individualExpenses: Math.round(individualExpenses),
         netExpenses: Math.round(netExpenses),
@@ -1028,6 +1040,7 @@ export class ExpensesService {
     scope: 'couple' | 'current_user',
     currentMemberRef: string | null,
     splitRatios: Map<string, number>,
+    equalSplitDivisor: number,
   ) {
     if (scope === 'couple') return expense.amount;
     if (!currentMemberRef) return 0;
@@ -1037,10 +1050,17 @@ export class ExpensesService {
     }
 
     if (expense.splitMethod === 'proportional') {
-      return expense.amount * (splitRatios.get(currentMemberRef) ?? 0.5);
+      return (
+        expense.amount *
+        (splitRatios.get(currentMemberRef) ?? 1 / equalSplitDivisor)
+      );
     }
 
-    return expense.amount / 2;
+    return expense.amount / equalSplitDivisor;
+  }
+
+  private getEqualSplitDivisor(memberCount: number): number {
+    return Math.max(memberCount, 2);
   }
 
   private formatPeriod(year: number, month: number) {

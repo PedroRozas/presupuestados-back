@@ -1,7 +1,13 @@
-import { Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { NodePgDatabase } from 'drizzle-orm/node-postgres';
-import { eq, isNull, and, ne } from 'drizzle-orm';
-import { randomUUID } from 'crypto';
+import { eq, isNull, and, ne, isNotNull } from 'drizzle-orm';
 import { DRIZZLE } from '../database/database.module.js';
 import * as schema from '../database/schema/index.js';
 import { couples, profiles, familyMembers } from '../database/schema/index.js';
@@ -29,73 +35,135 @@ export class CouplesService {
     userId: string,
     inviteCode: string,
   ): Promise<{ message: string }> {
-    // Paso 2.1 — Buscar la pareja por invite_code
-    this.logger.log(`Buscando pareja con invite_code: ${inviteCode}`);
-    const coupleResult = await this.db
-      .select({ id: couples.id })
-      .from(couples)
-      .where(eq(couples.inviteCode, inviteCode))
-      .limit(1);
-
-    if (coupleResult.length === 0) {
-      this.logger.warn(`Código de invitación no encontrado: ${inviteCode}`);
-      throw new NotFoundException(
-        `El código de invitación '${inviteCode}' no es válido`,
-      );
-    }
-
-    const coupleId = coupleResult[0].id;
-    this.logger.log(`Pareja encontrada: ${coupleId}`);
-
-    // Paso 2.2 — Actualizar el profile del usuario con el couple_id
-    await this.db
-      .update(profiles)
-      .set({ coupleId })
-      .where(eq(profiles.id, userId));
-
-    this.logger.log(
-      `Profile del usuario ${userId} actualizado con couple_id: ${coupleId}`,
-    );
-
-    // Paso 2.3 — Buscar slot familiar vacío (linked_user_id IS NULL)
-    const emptySlotResult = await this.db
-      .select({ id: familyMembers.id })
-      .from(familyMembers)
-      .where(
-        and(
-          eq(familyMembers.coupleId, coupleId),
-          isNull(familyMembers.linkedUserId),
-        ),
-      )
-      .limit(1);
-
-    const emptySlot = emptySlotResult[0];
-
-    // Paso 2.4 — Asignar al slot vacío o crear nuevo registro
-    if (emptySlot) {
-      this.logger.log(
-        `Slot vacío encontrado: ${emptySlot.id}. Asignando usuario...`,
-      );
-      await this.db
-        .update(familyMembers)
-        .set({ linkedUserId: userId })
-        .where(eq(familyMembers.id, emptySlot.id));
-    } else {
-      this.logger.log(
-        `Sin slots vacíos. Insertando nuevo family_member para usuario ${userId}`,
-      );
-      await this.db.insert(familyMembers).values({
-        id: randomUUID(),
-        coupleId,
-        linkedUserId: userId,
-        ownerId: userId,
-        name: 'Pareja',
+    const normalizedInviteCode = inviteCode.trim().toUpperCase();
+    if (!normalizedInviteCode) {
+      throw new BadRequestException({
+        code: 'INVITE_CODE_REQUIRED',
+        message: 'El código de invitación no puede estar vacío',
       });
     }
 
-    this.logger.log(
-      `Usuario ${userId} vinculado exitosamente a la pareja ${coupleId}`,
-    );
+    await this.db.transaction(async (tx) => {
+      this.logger.log(
+        `Buscando pareja con invite_code: ${normalizedInviteCode}`,
+      );
+
+      const [profile] = await tx
+        .select({
+          id: profiles.id,
+          coupleId: profiles.coupleId,
+          fullName: profiles.fullName,
+        })
+        .from(profiles)
+        .where(eq(profiles.id, userId))
+        .limit(1);
+
+      if (!profile) {
+        throw new NotFoundException('Perfil no encontrado');
+      }
+
+      const [couple] = await tx
+        .select({ id: couples.id })
+        .from(couples)
+        .where(eq(couples.inviteCode, normalizedInviteCode))
+        .limit(1);
+
+      if (!couple) {
+        this.logger.warn(
+          `Código de invitación no encontrado: ${normalizedInviteCode}`,
+        );
+        throw new NotFoundException({
+          code: 'INVITE_CODE_INVALID',
+          message: `El código de invitación '${normalizedInviteCode}' no es válido`,
+        });
+      }
+
+      if (profile.coupleId === couple.id) {
+        throw new ConflictException({
+          code: 'INVITE_CODE_OWN_COUPLE',
+          message: 'Ya perteneces a la pareja asociada a este código.',
+        });
+      }
+
+      if (profile.coupleId) {
+        throw new ConflictException({
+          code: 'USER_ALREADY_LINKED',
+          message:
+            'Tu cuenta ya está vinculada a una pareja. Debes desvincularte antes de usar otro código.',
+        });
+      }
+
+      const linkedMembers = await tx
+        .select({ id: familyMembers.id })
+        .from(familyMembers)
+        .where(
+          and(
+            eq(familyMembers.coupleId, couple.id),
+            isNotNull(familyMembers.linkedUserId),
+          ),
+        );
+
+      if (linkedMembers.length >= 2) {
+        throw new ConflictException({
+          code: 'COUPLE_ALREADY_FULL',
+          message:
+            'Este código ya fue usado por otra cuenta. Pide a tu pareja revisar su vínculo.',
+        });
+      }
+
+      const [emptySlot] = await tx
+        .select({ id: familyMembers.id })
+        .from(familyMembers)
+        .where(
+          and(
+            eq(familyMembers.coupleId, couple.id),
+            isNull(familyMembers.linkedUserId),
+          ),
+        )
+        .limit(1);
+
+      if (!emptySlot) {
+        throw new ConflictException({
+          code: 'COUPLE_ALREADY_FULL',
+          message:
+            'Este código ya fue usado por otra cuenta. Pide a tu pareja revisar su vínculo.',
+        });
+      }
+
+      const displayName = profile.fullName?.trim() || 'Pareja';
+      const updatedSlot = await tx
+        .update(familyMembers)
+        .set({
+          linkedUserId: userId,
+          ownerId: userId,
+          name: displayName,
+        })
+        .where(
+          and(
+            eq(familyMembers.id, emptySlot.id),
+            isNull(familyMembers.linkedUserId),
+          ),
+        )
+        .returning({ id: familyMembers.id });
+
+      if (!updatedSlot[0]) {
+        throw new ConflictException({
+          code: 'COUPLE_ALREADY_FULL',
+          message:
+            'Este código acaba de ser usado por otra cuenta. Pide a tu pareja revisar su vínculo.',
+        });
+      }
+
+      await tx
+        .update(profiles)
+        .set({ coupleId: couple.id })
+        .where(eq(profiles.id, userId));
+
+      this.logger.log(
+        `Usuario ${userId} vinculado exitosamente a la pareja ${couple.id}`,
+      );
+    });
+
     return { message: 'Vinculación exitosa' };
   }
 

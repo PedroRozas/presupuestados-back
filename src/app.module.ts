@@ -18,6 +18,7 @@ import { FamilyMembersModule } from './family-members/family-members.module.js';
 import { CategoriesModule } from './categories/categories.module.js';
 import { AIUsageModule } from './ai-usage/ai-usage.module.js';
 import { SecurityModule } from './security/security.module.js';
+import { ExportsModule } from './exports/exports.module.js';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { SecurityModule } from './security/security.module.js';
     PartnerRequestsModule,
     FamilyMembersModule,
     CategoriesModule,
+    ExportsModule,
   ],
   controllers: [],
   providers: [],

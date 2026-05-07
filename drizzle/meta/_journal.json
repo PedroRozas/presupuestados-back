@@ -15,6 +15,13 @@
       "when": 1777819679564,
       "tag": "0001_brown_professor_monster",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1778036175765,
+      "tag": "0002_narrow_leech",
+      "breakpoints": true
     }
   ]
 }

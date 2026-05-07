@@ -235,6 +235,7 @@ export class DashboardService {
 
     // Solo miembros vinculados a un usuario real
     const linkedMembers = members.filter((m) => m.linkedUserId !== null);
+    const equalSplitDivisor = Math.max(linkedMembers.length, 2);
 
     // Paso 1: calcular ingreso neto por miembro
     const memberData = linkedMembers.map((member) => {
@@ -286,9 +287,12 @@ export class DashboardService {
         for (const expense of jointExpenses) {
           const amt = effectiveAmt(expense);
           if (expense.splitMethod === '50/50') {
-            shareOfJoint += amt / 2;
+            shareOfJoint += amt / equalSplitDivisor;
           } else if (expense.splitMethod === 'proportional') {
-            const share = totalNetIncome > 0 ? netIncome / totalNetIncome : 0.5;
+            const share =
+              totalNetIncome > 0
+                ? netIncome / totalNetIncome
+                : 1 / equalSplitDivisor;
             shareOfJoint += amt * share;
           }
         }

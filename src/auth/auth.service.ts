@@ -1,10 +1,13 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   InternalServerErrorException,
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
+import type { User } from '@supabase/supabase-js';
+import { randomInt } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service.js';
 import { CouplesService } from '../couples/couples.service.js';
 import { InitializeUserDto } from './dto/initialize-user.dto.js';
@@ -13,6 +16,7 @@ import { RegisterDto } from './dto/register.dto.js';
 import { RefreshDto } from './dto/refresh.dto.js';
 import { ForgotPasswordDto } from './dto/forgot-password.dto.js';
 import { UpdatePasswordDto } from './dto/update-password.dto.js';
+import { ResendConfirmationDto } from './dto/resend-confirmation.dto.js';
 import { SecurityEventsService } from '../security/security-events.service.js';
 
 export interface AuthSession {
@@ -54,25 +58,49 @@ export class AuthService {
   // Crea un nuevo usuario en Supabase Auth.
   // ─────────────────────────────────────────────────────────────────────────
   async register(dto: RegisterDto): Promise<RegisterResponse> {
-    this.logger.log(`Registrando nuevo usuario: ${dto.email}`);
+    const email = this.normalizeEmail(dto.email);
+    const fullName = dto.full_name.trim();
+    const inviteCode = this.normalizeInviteCode(dto.invite_code);
+
+    this.logger.log(`Registrando nuevo usuario: ${email}`);
     const authClient = this.supabaseService.createAuthClient();
+    const existingUser = await this.findAuthUserByEmail(email);
+
+    if (existingUser) {
+      this.throwEmailAlreadyRegistered(existingUser);
+    }
 
     const { data, error } = await authClient.auth.signUp({
-      email: dto.email,
+      email,
       password: dto.password,
       options: {
         data: {
-          full_name: dto.full_name,
-          invite_code: dto.invite_code?.trim().toUpperCase() || null,
+          full_name: fullName,
+          invite_code: inviteCode,
         },
       },
     });
 
     if (error || !data.user) {
       this.logger.error(`Error en registro: ${error?.message}`);
+      if (this.isAlreadyRegisteredError(error?.message)) {
+        throw new ConflictException({
+          code: 'EMAIL_ALREADY_REGISTERED',
+          message:
+            'Ese correo ya tiene una cuenta. Inicia sesión o recupera tu contraseña.',
+        });
+      }
       throw new InternalServerErrorException(
         error?.message ?? 'Error al registrar el usuario',
       );
+    }
+
+    if (data.user.identities?.length === 0) {
+      throw new ConflictException({
+        code: 'EMAIL_ALREADY_REGISTERED',
+        message:
+          'Ese correo ya tiene una cuenta. Inicia sesión o recupera tu contraseña.',
+      });
     }
 
     this.logger.log(
@@ -84,7 +112,7 @@ export class AuthService {
       emailConfirmationRequired: true,
       user: {
         id: data.user.id,
-        email: data.user.email ?? dto.email,
+        email: data.user.email ?? email,
       },
     };
   }
@@ -95,17 +123,19 @@ export class AuthService {
   // Devuelve access_token y refresh_token.
   // ─────────────────────────────────────────────────────────────────────────
   async login(dto: LoginDto): Promise<AuthSession> {
-    this.logger.log(`Intento de login para: ${dto.email}`);
+    const email = this.normalizeEmail(dto.email);
+
+    this.logger.log(`Intento de login para: ${email}`);
     const supabase = this.supabaseService.createAuthClient();
 
     const { data, error } = await supabase.auth.signInWithPassword({
-      email: dto.email,
+      email,
       password: dto.password,
     });
 
     if (error || !data.session || !data.user) {
-      this.logger.warn(`Login fallido para ${dto.email}: ${error?.message}`);
-      this.securityEventsService.logLoginFailed(dto.email, error?.message);
+      this.logger.warn(`Login fallido para ${email}: ${error?.message}`);
+      this.securityEventsService.logLoginFailed(email, error?.message);
       if (error?.message.toLowerCase().includes('email not confirmed')) {
         throw new UnauthorizedException(
           'Debes confirmar tu correo antes de iniciar sesión.',
@@ -118,20 +148,15 @@ export class AuthService {
     }
 
     if (!data.user.email_confirmed_at) {
-      this.logger.warn(
-        `Login bloqueado para ${dto.email}: email no confirmado`,
-      );
-      this.securityEventsService.logLoginFailed(
-        dto.email,
-        'email no confirmado',
-      );
+      this.logger.warn(`Login bloqueado para ${email}: email no confirmado`);
+      this.securityEventsService.logLoginFailed(email, 'email no confirmado');
       throw new UnauthorizedException(
         'Debes confirmar tu correo antes de iniciar sesión.',
       );
     }
 
     await this.initializeUserDataFromMetadata(data.user.id, {
-      email: data.user.email ?? dto.email,
+      email: data.user.email ?? email,
       fullName: data.user.user_metadata?.['full_name'],
       inviteCode: data.user.user_metadata?.['invite_code'],
     });
@@ -144,7 +169,7 @@ export class AuthService {
       token_type: data.session.token_type,
       user: {
         id: data.user.id,
-        email: data.user.email ?? dto.email,
+        email: data.user.email ?? email,
       },
     };
   }
@@ -202,13 +227,104 @@ export class AuthService {
     }
 
     await this.initializeUserData(userId, {
-      p_email: metadata.email,
+      p_email: this.normalizeEmail(metadata.email),
       p_full_name: metadata.fullName.trim(),
       p_invite_code:
         typeof metadata.inviteCode === 'string' && metadata.inviteCode.trim()
           ? metadata.inviteCode.trim().toUpperCase()
           : undefined,
     });
+  }
+
+  private normalizeEmail(email: string): string {
+    return email.trim().toLowerCase();
+  }
+
+  private normalizeInviteCode(inviteCode?: string | null): string | null {
+    const normalized = inviteCode?.trim().toUpperCase();
+    return normalized || null;
+  }
+
+  private isAlreadyRegisteredError(message?: string): boolean {
+    const normalized = message?.toLowerCase() ?? '';
+    return normalized.includes('already') || normalized.includes('registered');
+  }
+
+  private async findAuthUserByEmail(email: string): Promise<User | null> {
+    const supabase = this.supabaseService.createAuthClient();
+    const perPage = 1000;
+
+    for (let page = 1; page <= 5; page += 1) {
+      const { data, error } = await supabase.auth.admin.listUsers({
+        page,
+        perPage,
+      });
+
+      if (error) {
+        this.logger.warn(
+          `No se pudo verificar existencia del correo en Auth: ${error.message}`,
+        );
+        return this.findProfileAuthFallback(email);
+      }
+
+      const found = data.users.find(
+        (user) => user.email?.toLowerCase() === email,
+      );
+      if (found) return found;
+      if (data.users.length < perPage) return null;
+    }
+
+    return this.findProfileAuthFallback(email);
+  }
+
+  private async findProfileAuthFallback(email: string): Promise<User | null> {
+    const supabase = this.supabaseService.getClient();
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id,email')
+      .ilike('email', email)
+      .limit(1)
+      .maybeSingle();
+
+    if (error || !data) return null;
+
+    return {
+      id: data.id,
+      email: data.email ?? email,
+      app_metadata: {},
+      user_metadata: {},
+      aud: 'authenticated',
+      confirmed_at: new Date(0).toISOString(),
+      email_confirmed_at: new Date(0).toISOString(),
+      created_at: new Date(0).toISOString(),
+    };
+  }
+
+  private throwEmailAlreadyRegistered(user: User): never {
+    if (!user.email_confirmed_at && !user.confirmed_at) {
+      throw new ConflictException({
+        code: 'EMAIL_PENDING_CONFIRMATION',
+        message:
+          'Ese correo ya tiene una cuenta pendiente de confirmación. Puedes reenviar el correo de confirmación.',
+      });
+    }
+
+    throw new ConflictException({
+      code: 'EMAIL_ALREADY_REGISTERED',
+      message:
+        'Ese correo ya tiene una cuenta. Inicia sesión o recupera tu contraseña.',
+    });
+  }
+
+  private generateInviteCode(): string {
+    const alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    let code = '';
+
+    for (let index = 0; index < 6; index += 1) {
+      code += alphabet[randomInt(alphabet.length)];
+    }
+
+    return code;
   }
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -243,6 +359,9 @@ export class AuthService {
     dto: InitializeUserDto,
   ): Promise<{ message: string; coupleId?: string }> {
     const supabase = this.supabaseService.getClient();
+    const email = this.normalizeEmail(dto.p_email);
+    const fullName = dto.p_full_name.trim();
+    const inviteCode = this.normalizeInviteCode(dto.p_invite_code);
 
     this.logger.log(`Inicializando datos para usuario: ${userId}`);
 
@@ -267,8 +386,8 @@ export class AuthService {
     // En algunos entornos la fila no se crea por trigger al registrar auth.users.
     const { error: profileError } = await supabase.from('profiles').upsert({
       id: userId,
-      email: dto.p_email,
-      full_name: dto.p_full_name,
+      email,
+      full_name: fullName,
     });
 
     if (profileError) {
@@ -281,11 +400,11 @@ export class AuthService {
     }
 
     // Paso 2.2 — Delegar vinculación si viene invite_code
-    if (dto.p_invite_code) {
+    if (inviteCode) {
       this.logger.log(
         `Usuario ${userId} provee invite_code. Vinculando a pareja existente...`,
       );
-      await this.couplesService.joinCouple(userId, dto.p_invite_code);
+      await this.couplesService.joinCouple(userId, inviteCode);
 
       const { data: updatedProfile } = await supabase
         .from('profiles')
@@ -304,18 +423,15 @@ export class AuthService {
       `Usuario ${userId} sin invite_code. Generando nueva pareja...`,
     );
 
-    const generateCode = () =>
-      Math.random().toString(36).substring(2, 8).toUpperCase();
-
     let newCoupleId = '';
-    let inviteCode = generateCode();
+    let newInviteCode = this.generateInviteCode();
     let success = false;
-    let retries = 3;
+    let retries = 10;
 
     while (retries > 0 && !success) {
       const { data: insertedCouple, error: coupleError } = await supabase
         .from('couples')
-        .insert({ invite_code: inviteCode })
+        .insert({ invite_code: newInviteCode })
         .select('id')
         .single();
 
@@ -323,9 +439,9 @@ export class AuthService {
         if (coupleError.code === '23505') {
           // Unique constraint violation — reintentar con otro código
           this.logger.warn(
-            `Colisión de invite_code: ${inviteCode}. Reintentando...`,
+            `Colisión de invite_code: ${newInviteCode}. Reintentando...`,
           );
-          inviteCode = generateCode();
+          newInviteCode = this.generateInviteCode();
           retries--;
           continue;
         }
@@ -367,7 +483,7 @@ export class AuthService {
         couple_id: newCoupleId,
         owner_id: userId,
         linked_user_id: userId,
-        name: dto.p_full_name,
+        name: fullName,
       });
 
     if (member1Error) {
@@ -411,7 +527,9 @@ export class AuthService {
   // Siempre responde con éxito para no revelar si el email existe.
   // ─────────────────────────────────────────────────────────────────────────
   async forgotPassword(dto: ForgotPasswordDto): Promise<{ message: string }> {
-    this.logger.log(`Solicitud de recuperación para: ${dto.email}`);
+    const email = this.normalizeEmail(dto.email);
+
+    this.logger.log(`Solicitud de recuperación para: ${email}`);
     const supabase = this.supabaseService.createAuthClient();
 
     // Validar redirect_to contra la URL base del frontend configurada
@@ -436,7 +554,7 @@ export class AuthService {
       }
     }
 
-    await supabase.auth.resetPasswordForEmail(dto.email, {
+    await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: dto.redirect_to,
     });
 
@@ -444,6 +562,28 @@ export class AuthService {
     return {
       message:
         'Si el correo existe, recibirás instrucciones para recuperar tu contraseña.',
+    };
+  }
+
+  async resendConfirmation(
+    dto: ResendConfirmationDto,
+  ): Promise<{ message: string }> {
+    const email = this.normalizeEmail(dto.email);
+    const supabase = this.supabaseService.createAuthClient();
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email,
+    });
+
+    if (error) {
+      this.logger.warn(
+        `No se pudo reenviar confirmación a ${email}: ${error.message}`,
+      );
+    }
+
+    return {
+      message:
+        'Si el correo tiene una confirmación pendiente, recibirás un nuevo mensaje.',
     };
   }
 

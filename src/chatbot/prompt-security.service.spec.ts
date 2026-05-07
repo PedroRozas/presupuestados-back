@@ -318,6 +318,13 @@ describe('ChatbotService guardrails', () => {
   });
 
   it('does not resend non-call response items when synthesizing tool results', async () => {
+    interface UsageStatus {
+      used: number;
+      limit: number;
+      remaining: number;
+      isPremium: boolean;
+    }
+
     const usageService = {
       reserveUsage: jest.fn().mockResolvedValue({
         isPremium: false,
@@ -329,7 +336,7 @@ describe('ChatbotService guardrails', () => {
       refundUsage: jest.fn(),
       getStatusForUser: jest.fn(),
       getPublicStatusForUser: jest.fn(),
-      toPublicStatusItem: jest.fn((usage) => ({
+      toPublicStatusItem: jest.fn((usage: UsageStatus) => ({
         used: usage.used,
         limit: usage.limit,
         remaining: usage.remaining,
@@ -403,7 +410,12 @@ describe('ChatbotService guardrails', () => {
     });
 
     expect(internals.runModelInputGuard).not.toHaveBeenCalled();
-    const synthesisInput = internals.createResponse.mock.calls[1][0];
+    const createResponseMock = internals.createResponse as jest.Mock<
+      Promise<unknown>,
+      [unknown[]]
+    >;
+    const synthesisInput = createResponseMock.mock.calls[1]?.[0];
+    expect(synthesisInput).toBeDefined();
     expect(synthesisInput).toContain(functionCall);
     expect(synthesisInput).toContainEqual({
       type: 'function_call_output',

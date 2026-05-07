@@ -11,6 +11,7 @@ import {
   date,
   uniqueIndex,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 // ─── couples ────────────────────────────────────────────────────────────────
 
@@ -62,6 +63,9 @@ export const familyMembers = pgTable(
   (t) => [
     index('idx_family_members_couple').on(t.coupleId),
     index('idx_family_members_linked_user').on(t.linkedUserId),
+    uniqueIndex('idx_family_members_linked_user_unique')
+      .on(t.linkedUserId)
+      .where(sql`${t.linkedUserId} IS NOT NULL`),
   ],
 );
 
