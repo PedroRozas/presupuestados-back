@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Inject,
   Injectable,
   NotFoundException,
@@ -83,11 +84,88 @@ export class ExpensesService {
     return { totalIncome, splitPercentages };
   }
 
+  private async assertSharedExpenseHasLinkedPartner(
+    coupleId: string,
+    splitMethod: string,
+  ): Promise<void> {
+    if (splitMethod === 'individual') return;
+
+    const members = await this.db
+      .select({ linkedUserId: familyMembers.linkedUserId })
+      .from(familyMembers)
+      .where(eq(familyMembers.coupleId, coupleId));
+
+    const linkedMembersCount = members.filter(
+      (member) => member.linkedUserId,
+    ).length;
+
+    if (linkedMembersCount < 2) {
+      throw new BadRequestException({
+        code: 'PARTNER_NOT_LINKED',
+        message:
+          'Vincula a tu pareja antes de crear gastos compartidos. Por ahora puedes registrar gastos individuales.',
+      });
+    }
+  }
+
+  private async assertExpenseMembersAreLinked(
+    coupleId: string,
+    expense: {
+      p_paid_by: string;
+      p_split_method: string;
+      p_assigned_user_id?: string | null;
+    },
+  ): Promise<void> {
+    const memberIds = Array.from(
+      new Set([
+        expense.p_paid_by,
+        ...(expense.p_split_method === 'individual' &&
+        expense.p_assigned_user_id
+          ? [expense.p_assigned_user_id]
+          : []),
+      ]),
+    );
+
+    const members = await this.db
+      .select({
+        id: familyMembers.id,
+        linkedUserId: familyMembers.linkedUserId,
+      })
+      .from(familyMembers)
+      .where(
+        and(
+          eq(familyMembers.coupleId, coupleId),
+          inArray(familyMembers.id, memberIds),
+        ),
+      );
+
+    const linkedMembers = new Map(
+      members.map((member) => [member.id, member.linkedUserId]),
+    );
+    const hasUnlinkedMember = memberIds.some(
+      (memberId) => !linkedMembers.get(memberId),
+    );
+
+    if (hasUnlinkedMember) {
+      throw new BadRequestException({
+        code: 'FAMILY_MEMBER_NOT_LINKED',
+        message:
+          'No puedes asignar gastos a una pareja que todavía no está vinculada.',
+      });
+    }
+  }
+
   async addExpense(
     coupleId: string,
     ownerId: string,
     createExpenseDto: CreateExpenseDto,
   ) {
+    await this.assertExpenseMembersAreLinked(coupleId, createExpenseDto);
+    await this.assertSharedExpenseHasLinkedPartner(
+      coupleId,
+      createExpenseDto.p_split_method,
+    );
+
     if (createExpenseDto.p_split_method === 'proportional') {
       await this.calculateSplitDetails(
         new Date(createExpenseDto.p_date),
@@ -139,6 +217,12 @@ export class ExpensesService {
   }
 
   async updateExpense(coupleId: string, updateExpenseDto: UpdateExpenseDto) {
+    await this.assertExpenseMembersAreLinked(coupleId, updateExpenseDto);
+    await this.assertSharedExpenseHasLinkedPartner(
+      coupleId,
+      updateExpenseDto.p_split_method,
+    );
+
     await Promise.all([
       this.coupleContextService.assertOptionalFamilyMemberBelongsToCouple(
         coupleId,
@@ -209,6 +293,12 @@ export class ExpensesService {
     }
 
     const newExpenseDto = updateRecurringDto.p_new_expense;
+    await this.assertExpenseMembersAreLinked(coupleId, newExpenseDto);
+    await this.assertSharedExpenseHasLinkedPartner(
+      coupleId,
+      newExpenseDto.p_split_method,
+    );
+
     const newExpenseDate = new Date(newExpenseDto.p_date);
     const newExpenseId = randomUUID();
     const cutoffDate = getPreviousMonthEndDate(newExpenseDate);

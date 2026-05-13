@@ -12,11 +12,13 @@ import * as schema from '../database/schema/index.js';
 import { deductions } from '../database/schema/index.js';
 import { CreateDeductionDto } from './dto/create-deduction.dto.js';
 import { UpdateDeductionDto } from './dto/update-deduction.dto.js';
+import { CoupleContextService } from '../common/services/couple-context.service.js';
 
 @Injectable()
 export class DeductionsService {
   constructor(
     @Inject(DRIZZLE) private readonly db: NodePgDatabase<typeof schema>,
+    private readonly coupleContextService: CoupleContextService,
   ) {}
 
   /**
@@ -39,6 +41,12 @@ export class DeductionsService {
     ownerId: string,
     dto: CreateDeductionDto,
   ) {
+    await this.coupleContextService.assertFamilyMemberIsLinked(
+      coupleId,
+      dto.user_id,
+      'No puedes asignar deducciones a una pareja que todavía no está vinculada.',
+    );
+
     const inserted = await this.db
       .insert(deductions)
       .values({
@@ -68,7 +76,14 @@ export class DeductionsService {
     if (dto.description !== undefined)
       updatePayload.description = dto.description;
     if (dto.date !== undefined) updatePayload.date = new Date(dto.date);
-    if (dto.user_id !== undefined) updatePayload.userId = dto.user_id;
+    if (dto.user_id !== undefined) {
+      await this.coupleContextService.assertFamilyMemberIsLinked(
+        coupleId,
+        dto.user_id,
+        'No puedes asignar deducciones a una pareja que todavía no está vinculada.',
+      );
+      updatePayload.userId = dto.user_id;
+    }
 
     const updated = await this.db
       .update(deductions)

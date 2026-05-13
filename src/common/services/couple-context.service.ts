@@ -79,6 +79,40 @@ export class CoupleContextService {
     }
   }
 
+  async assertFamilyMemberIsLinked(
+    coupleId: string,
+    familyMemberId: string,
+    message = 'No puedes asignar datos a una pareja que todavía no está vinculada.',
+  ): Promise<void> {
+    const result = await this.db
+      .select({
+        id: familyMembers.id,
+        linkedUserId: familyMembers.linkedUserId,
+      })
+      .from(familyMembers)
+      .where(
+        and(
+          eq(familyMembers.id, familyMemberId),
+          eq(familyMembers.coupleId, coupleId),
+        ),
+      )
+      .limit(1);
+
+    const member = result[0];
+    if (!member) {
+      throw new BadRequestException(
+        'El miembro familiar no pertenece a tu pareja',
+      );
+    }
+
+    if (!member.linkedUserId) {
+      throw new BadRequestException({
+        code: 'FAMILY_MEMBER_NOT_LINKED',
+        message,
+      });
+    }
+  }
+
   /**
    * Igual que assertFamilyMemberBelongsToCouple pero no hace nada si el ID es null/undefined.
    */

@@ -12,11 +12,13 @@ import * as schema from '../database/schema/index.js';
 import { incomes } from '../database/schema/index.js';
 import { CreateIncomeDto } from './dto/create-income.dto.js';
 import { UpdateIncomeDto } from './dto/update-income.dto.js';
+import { CoupleContextService } from '../common/services/couple-context.service.js';
 
 @Injectable()
 export class IncomesService {
   constructor(
     @Inject(DRIZZLE) private readonly db: NodePgDatabase<typeof schema>,
+    private readonly coupleContextService: CoupleContextService,
   ) {}
 
   /**
@@ -35,6 +37,12 @@ export class IncomesService {
    * POST /incomes
    */
   async createIncome(coupleId: string, ownerId: string, dto: CreateIncomeDto) {
+    await this.coupleContextService.assertFamilyMemberIsLinked(
+      coupleId,
+      dto.user_id,
+      'No puedes asignar ingresos a una pareja que todavía no está vinculada.',
+    );
+
     const inserted = await this.db
       .insert(incomes)
       .values({
@@ -64,7 +72,14 @@ export class IncomesService {
     if (dto.description !== undefined)
       updatePayload.description = dto.description;
     if (dto.date !== undefined) updatePayload.date = new Date(dto.date);
-    if (dto.user_id !== undefined) updatePayload.userId = dto.user_id;
+    if (dto.user_id !== undefined) {
+      await this.coupleContextService.assertFamilyMemberIsLinked(
+        coupleId,
+        dto.user_id,
+        'No puedes asignar ingresos a una pareja que todavía no está vinculada.',
+      );
+      updatePayload.userId = dto.user_id;
+    }
 
     const updated = await this.db
       .update(incomes)
