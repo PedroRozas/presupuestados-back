@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  HttpException,
   Injectable,
   InternalServerErrorException,
   Logger,
@@ -69,6 +70,8 @@ export class AuthService {
     if (existingUser) {
       this.throwEmailAlreadyRegistered(existingUser);
     }
+
+    await this.assertInviteCodeCanBeUsedForRegistration(inviteCode);
 
     const { data, error } = await authClient.auth.signUp({
       email,
@@ -226,14 +229,32 @@ export class AuthService {
       return;
     }
 
-    await this.initializeUserData(userId, {
+    const normalizedInviteCode =
+      typeof metadata.inviteCode === 'string' && metadata.inviteCode.trim()
+        ? metadata.inviteCode.trim().toUpperCase()
+        : undefined;
+
+    const initializationDto = {
       p_email: this.normalizeEmail(metadata.email),
       p_full_name: metadata.fullName.trim(),
-      p_invite_code:
-        typeof metadata.inviteCode === 'string' && metadata.inviteCode.trim()
-          ? metadata.inviteCode.trim().toUpperCase()
-          : undefined,
-    });
+      p_invite_code: normalizedInviteCode,
+    };
+
+    try {
+      await this.initializeUserData(userId, initializationDto);
+    } catch (error) {
+      if (!normalizedInviteCode || !this.isInviteCodeInvalidError(error)) {
+        throw error;
+      }
+
+      this.logger.warn(
+        `Invite_code guardado inválido para ${userId}: ${normalizedInviteCode}. Inicializando pareja nueva.`,
+      );
+      await this.initializeUserData(userId, {
+        ...initializationDto,
+        p_invite_code: undefined,
+      });
+    }
   }
 
   private normalizeEmail(email: string): string {
@@ -243,6 +264,74 @@ export class AuthService {
   private normalizeInviteCode(inviteCode?: string | null): string | null {
     const normalized = inviteCode?.trim().toUpperCase();
     return normalized || null;
+  }
+
+  private async assertInviteCodeCanBeUsedForRegistration(
+    inviteCode: string | null,
+  ): Promise<void> {
+    if (!inviteCode) return;
+
+    const supabase = this.supabaseService.getClient();
+    const { data: couple, error: coupleError } = await supabase
+      .from('couples')
+      .select('id')
+      .eq('invite_code', inviteCode)
+      .maybeSingle();
+
+    if (coupleError) {
+      this.logger.error(
+        `Error validando invite_code ${inviteCode}: ${coupleError.message}`,
+      );
+      throw new InternalServerErrorException(
+        `Error al validar código de invitación: ${coupleError.message}`,
+      );
+    }
+
+    if (!couple) {
+      throw new BadRequestException({
+        code: 'INVITE_CODE_INVALID',
+        message: `El código de invitación '${inviteCode}' no es válido`,
+      });
+    }
+
+    const { data: familyMembers, error: membersError } = await supabase
+      .from('family_members')
+      .select('id, linked_user_id')
+      .eq('couple_id', couple.id);
+
+    if (membersError) {
+      this.logger.error(
+        `Error validando cupos para invite_code ${inviteCode}: ${membersError.message}`,
+      );
+      throw new InternalServerErrorException(
+        `Error al validar cupos de pareja: ${membersError.message}`,
+      );
+    }
+
+    const linkedMembersCount =
+      familyMembers?.filter((member) => member.linked_user_id).length ?? 0;
+    const hasEmptySlot =
+      familyMembers?.some((member) => !member.linked_user_id) ?? false;
+
+    if (linkedMembersCount >= 2 || !hasEmptySlot) {
+      throw new ConflictException({
+        code: 'COUPLE_ALREADY_FULL',
+        message:
+          'Este código ya fue usado por otra cuenta. Pide a tu pareja revisar su vínculo.',
+      });
+    }
+  }
+
+  private isInviteCodeInvalidError(error: unknown): boolean {
+    if (!(error instanceof HttpException)) return false;
+
+    const response = error.getResponse();
+    return (
+      typeof response === 'object' &&
+      response !== null &&
+      'code' in response &&
+      response.code === 'INVITE_CODE_INVALID'
+    );
   }
 
   private isAlreadyRegisteredError(message?: string): boolean {
