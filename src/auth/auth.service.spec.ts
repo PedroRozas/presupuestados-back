@@ -16,6 +16,7 @@ describe('AuthService', () => {
         };
         signUp?: jest.Mock;
         signInWithPassword?: jest.Mock;
+        resetPasswordForEmail?: jest.Mock;
       };
     };
     dataClient?: {
@@ -32,6 +33,7 @@ describe('AuthService', () => {
         },
         signUp: jest.fn(),
         signInWithPassword: jest.fn(),
+        resetPasswordForEmail: jest.fn(),
       },
     };
 
@@ -83,6 +85,16 @@ describe('AuthService', () => {
         single: jest.fn().mockResolvedValue({ data, error: null }),
       }),
     }),
+  });
+
+  const originalEnv = process.env;
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+  });
+
+  afterAll(() => {
+    process.env = originalEnv;
   });
 
   it('rejects registration before creating an auth user when the invite code does not exist', async () => {
@@ -175,5 +187,29 @@ describe('AuthService', () => {
 
     expect(joinCouple).toHaveBeenCalledWith(userId, 'CHILEZUELA');
     expect(session.user.email).toBe('camartinezcarrasco@gmail.com');
+  });
+
+  it('uses CORS_ORIGIN as redirect allowlist when FRONTEND_URL is not configured', async () => {
+    delete process.env['FRONTEND_URL'];
+    process.env['CORS_ORIGIN'] = 'http://localhost:3001';
+
+    const resetPasswordForEmail = jest.fn().mockResolvedValue({ error: null });
+    const { service } = createService({
+      authClient: {
+        auth: {
+          resetPasswordForEmail,
+        },
+      },
+    });
+
+    await service.forgotPassword({
+      email: 'camartinezcarrasco@gmail.com',
+      redirect_to: 'http://localhost:3001/update-password',
+    });
+
+    expect(resetPasswordForEmail).toHaveBeenCalledWith(
+      'camartinezcarrasco@gmail.com',
+      { redirectTo: 'http://localhost:3001/update-password' },
+    );
   });
 });

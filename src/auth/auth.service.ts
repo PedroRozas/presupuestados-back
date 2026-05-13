@@ -621,30 +621,10 @@ export class AuthService {
     this.logger.log(`Solicitud de recuperación para: ${email}`);
     const supabase = this.supabaseService.createAuthClient();
 
-    // Validar redirect_to contra la URL base del frontend configurada
-    if (dto.redirect_to) {
-      const allowedBase = process.env['FRONTEND_URL'];
-      if (!allowedBase) {
-        throw new BadRequestException(
-          'Configuración de redirect_to no disponible',
-        );
-      }
-      const allowed = new URL(allowedBase);
-      let requested: URL;
-      try {
-        requested = new URL(dto.redirect_to);
-      } catch {
-        throw new BadRequestException('redirect_to no es una URL válida');
-      }
-      if (requested.origin !== allowed.origin) {
-        throw new BadRequestException(
-          'redirect_to no está en el dominio permitido',
-        );
-      }
-    }
+    const redirectTo = this.resolvePasswordResetRedirect(dto.redirect_to);
 
     await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: dto.redirect_to,
+      redirectTo,
     });
 
     // No se propaga el error para no revelar si el email está registrado
@@ -652,6 +632,49 @@ export class AuthService {
       message:
         'Si el correo existe, recibirás instrucciones para recuperar tu contraseña.',
     };
+  }
+
+  private resolvePasswordResetRedirect(redirectTo?: string): string {
+    const allowedBase = this.getAllowedFrontendBaseUrl();
+    const allowed = new URL(allowedBase);
+    const requested = redirectTo
+      ? this.parseRedirectUrl(redirectTo)
+      : new URL('/update-password', allowed);
+
+    if (requested.origin !== allowed.origin) {
+      throw new BadRequestException(
+        'redirect_to no está en el dominio permitido',
+      );
+    }
+
+    return requested.toString();
+  }
+
+  private getAllowedFrontendBaseUrl(): string {
+    const allowedBase =
+      process.env['FRONTEND_URL'] ?? process.env['CORS_ORIGIN'];
+
+    if (!allowedBase) {
+      throw new BadRequestException(
+        'Configuración de redirect_to no disponible',
+      );
+    }
+
+    try {
+      return new URL(allowedBase).origin;
+    } catch {
+      throw new BadRequestException(
+        'Configuración de redirect_to no es una URL válida',
+      );
+    }
+  }
+
+  private parseRedirectUrl(redirectTo: string): URL {
+    try {
+      return new URL(redirectTo);
+    } catch {
+      throw new BadRequestException('redirect_to no es una URL válida');
+    }
   }
 
   async resendConfirmation(
