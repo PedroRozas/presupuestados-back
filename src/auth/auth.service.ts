@@ -563,20 +563,9 @@ export class AuthService {
     };
   }
 
-  private resolvePasswordResetRedirect(redirectTo?: string): string {
+  private resolvePasswordResetRedirect(_redirectTo?: string): string {
     const allowedBase = this.getAllowedFrontendBaseUrl();
-    const allowed = new URL(allowedBase);
-    const requested = redirectTo
-      ? this.parseRedirectUrl(redirectTo)
-      : new URL('/update-password', allowed);
-
-    if (requested.origin !== allowed.origin) {
-      throw new BadRequestException(
-        'redirect_to no está en el dominio permitido',
-      );
-    }
-
-    return requested.toString();
+    return new URL('/update-password', allowedBase).toString();
   }
 
   private getAllowedFrontendBaseUrl(): string {
@@ -595,14 +584,6 @@ export class AuthService {
       throw new BadRequestException(
         'Configuración de redirect_to no es una URL válida',
       );
-    }
-  }
-
-  private parseRedirectUrl(redirectTo: string): URL {
-    try {
-      return new URL(redirectTo);
-    } catch {
-      throw new BadRequestException('redirect_to no es una URL válida');
     }
   }
 
