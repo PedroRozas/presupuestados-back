@@ -21,8 +21,15 @@ async function bootstrap() {
   const corsOrigin = process.env['CORS_ORIGIN'] ?? 'http://localhost:5173';
   const bodyLimit = process.env['JSON_BODY_LIMIT'] ?? '1mb';
 
+  const trustProxy = parseTrustProxy();
+  if (process.env['NODE_ENV'] === 'production' && trustProxy === false) {
+    console.warn(
+      '[BOOT] WARNING: NODE_ENV=production y TRUST_PROXY no configurado. Si el backend está detrás de un proxy/CDN, el rate-limit por IP NO funciona correctamente. Configurar TRUST_PROXY=1 (o el número de hops correcto).',
+    );
+  }
+
   const expressApp = app.getHttpAdapter().getInstance() as Express;
-  expressApp.set('trust proxy', parseTrustProxy());
+  expressApp.set('trust proxy', trustProxy);
   app.use(
     helmet({
       contentSecurityPolicy:
@@ -30,7 +37,7 @@ async function bootstrap() {
     }),
   );
   app.use(json({ limit: bodyLimit }));
-  app.use(urlencoded({ extended: true, limit: bodyLimit }));
+  app.use(urlencoded({ extended: false, limit: '100kb' }));
   app.use(cookieParser());
 
   app.enableCors({

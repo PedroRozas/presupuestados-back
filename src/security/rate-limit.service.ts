@@ -22,18 +22,19 @@ export class RateLimitService {
     private readonly redisService: RedisService,
     private readonly securityEventsService: SecurityEventsService,
   ) {
-    this.hashSalt =
-      this.configService.get<string>('RATE_LIMIT_HASH_SALT') ??
-      'presupuestados-dev-rate-limit-salt';
+    const configuredSalt = this.configService.get<string>(
+      'RATE_LIMIT_HASH_SALT',
+    );
+    const isProduction =
+      this.configService.get<string>('NODE_ENV') === 'production';
 
-    if (
-      !this.configService.get<string>('RATE_LIMIT_HASH_SALT') &&
-      this.configService.get<string>('NODE_ENV') === 'production'
-    ) {
-      this.logger.warn(
-        'RATE_LIMIT_HASH_SALT no está configurado en producción.',
+    if (isProduction && !configuredSalt) {
+      throw new Error(
+        'RATE_LIMIT_HASH_SALT es obligatorio en producción. Configurar antes de iniciar el servicio.',
       );
     }
+
+    this.hashSalt = configuredSalt ?? 'presupuestados-dev-rate-limit-salt';
   }
 
   async checkGlobalLimit(request: RateLimitRequest): Promise<RateLimitResult> {
@@ -287,6 +288,41 @@ export class RateLimitService {
             eventType: 'password_reset_limited',
           },
         ];
+      case 'passwordUpdate':
+        return [
+          {
+            scope: 'password_update',
+            routeKey: 'auth:update-password',
+            identity: 'user',
+            windowSeconds: this.getNumber(
+              'RATE_LIMIT_PASSWORD_UPDATE_WINDOW_SECONDS',
+              DEFAULT_RATE_LIMITS.passwordUpdateWindowSeconds,
+            ),
+            max: this.getNumber(
+              'RATE_LIMIT_PASSWORD_UPDATE_USER_MAX',
+              DEFAULT_RATE_LIMITS.passwordUpdateUserMax,
+            ),
+            cooldownSeconds: this.getNumber(
+              'RATE_LIMIT_PASSWORD_UPDATE_COOLDOWN_SECONDS',
+              DEFAULT_RATE_LIMITS.passwordUpdateWindowSeconds,
+            ),
+            eventType: 'password_update_limited',
+          },
+          {
+            scope: 'password_update',
+            routeKey: 'auth:update-password',
+            identity: 'ip',
+            windowSeconds: this.getNumber(
+              'RATE_LIMIT_PASSWORD_UPDATE_WINDOW_SECONDS',
+              DEFAULT_RATE_LIMITS.passwordUpdateWindowSeconds,
+            ),
+            max: this.getNumber(
+              'RATE_LIMIT_PASSWORD_UPDATE_IP_MAX',
+              DEFAULT_RATE_LIMITS.passwordUpdateIpMax,
+            ),
+            eventType: 'password_update_limited',
+          },
+        ];
       case 'authRefresh':
         return [
           {
@@ -300,6 +336,71 @@ export class RateLimitService {
             max: this.getNumber(
               'RATE_LIMIT_REFRESH_MAX',
               DEFAULT_RATE_LIMITS.refreshMax,
+            ),
+            eventType: 'rate_limit_exceeded',
+          },
+        ];
+      case 'authInitialize':
+        return [
+          {
+            scope: 'auth_initialize',
+            routeKey: 'auth:initialize',
+            identity: 'user',
+            windowSeconds: this.getNumber(
+              'RATE_LIMIT_AUTH_INITIALIZE_WINDOW_SECONDS',
+              DEFAULT_RATE_LIMITS.authInitializeWindowSeconds,
+            ),
+            max: this.getNumber(
+              'RATE_LIMIT_AUTH_INITIALIZE_USER_MAX',
+              DEFAULT_RATE_LIMITS.authInitializeUserMax,
+            ),
+            eventType: 'rate_limit_exceeded',
+          },
+        ];
+      case 'coupleJoin':
+        return [
+          {
+            scope: 'couple_join',
+            routeKey: 'couples:join',
+            identity: 'user',
+            windowSeconds: this.getNumber(
+              'RATE_LIMIT_COUPLE_JOIN_WINDOW_SECONDS',
+              DEFAULT_RATE_LIMITS.coupleJoinWindowSeconds,
+            ),
+            max: this.getNumber(
+              'RATE_LIMIT_COUPLE_JOIN_USER_MAX',
+              DEFAULT_RATE_LIMITS.coupleJoinUserMax,
+            ),
+            eventType: 'rate_limit_exceeded',
+          },
+          {
+            scope: 'couple_join',
+            routeKey: 'couples:join',
+            identity: 'ip',
+            windowSeconds: this.getNumber(
+              'RATE_LIMIT_COUPLE_JOIN_WINDOW_SECONDS',
+              DEFAULT_RATE_LIMITS.coupleJoinWindowSeconds,
+            ),
+            max: this.getNumber(
+              'RATE_LIMIT_COUPLE_JOIN_IP_MAX',
+              DEFAULT_RATE_LIMITS.coupleJoinIpMax,
+            ),
+            eventType: 'rate_limit_exceeded',
+          },
+        ];
+      case 'partnerInvite':
+        return [
+          {
+            scope: 'partner_invite',
+            routeKey: 'partner-requests:send',
+            identity: 'user',
+            windowSeconds: this.getNumber(
+              'RATE_LIMIT_PARTNER_INVITE_WINDOW_SECONDS',
+              DEFAULT_RATE_LIMITS.partnerInviteWindowSeconds,
+            ),
+            max: this.getNumber(
+              'RATE_LIMIT_PARTNER_INVITE_USER_MAX',
+              DEFAULT_RATE_LIMITS.partnerInviteUserMax,
             ),
             eventType: 'rate_limit_exceeded',
           },

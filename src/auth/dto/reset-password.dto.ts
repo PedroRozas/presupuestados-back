@@ -1,9 +1,9 @@
 import { IsString, MinLength } from 'class-validator';
 
-export class UpdatePasswordDto {
-  @IsString({ message: 'La contraseña actual debe ser un texto' })
-  @MinLength(1, { message: 'La contraseña actual es requerida' })
-  current_password!: string;
+export class ResetPasswordDto {
+  @IsString({ message: 'El access token debe ser un texto' })
+  @MinLength(10, { message: 'El access token es requerido' })
+  access_token!: string;
 
   @IsString({ message: 'La nueva contraseña debe ser un texto' })
   @MinLength(12, {

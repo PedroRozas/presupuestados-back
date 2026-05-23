@@ -12,7 +12,7 @@ export class RegisterDto {
   email!: string;
 
   @IsString({ message: 'La contraseña debe ser un texto' })
-  @MinLength(6, { message: 'La contraseña debe tener al menos 6 caracteres' })
+  @MinLength(12, { message: 'La contraseña debe tener al menos 12 caracteres' })
   @IsNotEmpty({ message: 'La contraseña es requerida' })
   password!: string;
 

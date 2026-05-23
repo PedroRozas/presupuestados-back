@@ -7,7 +7,6 @@ import {
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
-import type { User } from '@supabase/supabase-js';
 import { randomInt } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service.js';
 import { CouplesService } from '../couples/couples.service.js';
@@ -17,8 +16,10 @@ import { RegisterDto } from './dto/register.dto.js';
 import { RefreshDto } from './dto/refresh.dto.js';
 import { ForgotPasswordDto } from './dto/forgot-password.dto.js';
 import { UpdatePasswordDto } from './dto/update-password.dto.js';
+import { ResetPasswordDto } from './dto/reset-password.dto.js';
 import { ResendConfirmationDto } from './dto/resend-confirmation.dto.js';
 import { SecurityEventsService } from '../security/security-events.service.js';
+import { RateLimitService } from '../security/rate-limit.service.js';
 
 export interface AuthSession {
   access_token: string;
@@ -52,27 +53,21 @@ export class AuthService {
     private readonly supabaseService: SupabaseService,
     private readonly couplesService: CouplesService,
     private readonly securityEventsService: SecurityEventsService,
+    private readonly rateLimitService: RateLimitService,
   ) {}
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // POST /auth/register
-  // Crea un nuevo usuario en Supabase Auth.
-  // ─────────────────────────────────────────────────────────────────────────
   async register(dto: RegisterDto): Promise<RegisterResponse> {
     const email = this.normalizeEmail(dto.email);
     const fullName = dto.full_name.trim();
     const inviteCode = this.normalizeInviteCode(dto.invite_code);
 
-    this.logger.log(`Registrando nuevo usuario: ${email}`);
-    const authClient = this.supabaseService.createAuthClient();
-    const existingUser = await this.findAuthUserByEmail(email);
-
-    if (existingUser) {
-      this.throwEmailAlreadyRegistered(existingUser);
-    }
+    this.logger.log(
+      `Solicitud de registro recibida (hash=${this.rateLimitService.hashIdentifier(email)})`,
+    );
 
     await this.assertInviteCodeCanBeUsedForRegistration(inviteCode);
 
+    const authClient = this.supabaseService.createPublicAuthClient();
     const { data, error } = await authClient.auth.signUp({
       email,
       password: dto.password,
@@ -84,38 +79,36 @@ export class AuthService {
       },
     });
 
-    if (error || !data.user) {
-      this.logger.error(`Error en registro: ${error?.message}`);
-      if (this.isAlreadyRegisteredError(error?.message)) {
-        throw new ConflictException({
-          code: 'EMAIL_ALREADY_REGISTERED',
-          message:
-            'Ese correo ya tiene una cuenta. Inicia sesión o recupera tu contraseña.',
-        });
-      }
+    if (error) {
+      this.logger.error(`Error en signUp: ${error.message}`);
       throw new InternalServerErrorException(
-        error?.message ?? 'Error al registrar el usuario',
+        'No se pudo procesar el registro. Inténtalo más tarde.',
       );
     }
 
-    if (data.user.identities?.length === 0) {
-      throw new ConflictException({
-        code: 'EMAIL_ALREADY_REGISTERED',
-        message:
-          'Ese correo ya tiene una cuenta. Inicia sesión o recupera tu contraseña.',
+    if (data.user && data.user.identities?.length === 0) {
+      this.logger.log(
+        'Registro de email ya existente: reenviando confirmación de forma silenciosa',
+      );
+      const resendClient = this.supabaseService.createPublicAuthClient();
+      const { error: resendError } = await resendClient.auth.resend({
+        type: 'signup',
+        email,
       });
+      if (resendError) {
+        this.logger.warn(
+          `Resend silencioso falló: ${resendError.message}`,
+        );
+      }
     }
 
-    this.logger.log(
-      `Usuario registrado, pendiente de confirmación: ${data.user.id}`,
-    );
     return {
       message:
-        'Revisa tu correo para confirmar tu cuenta antes de iniciar sesión.',
+        'Si el correo no estaba registrado, recibirás un email para confirmar tu cuenta.',
       emailConfirmationRequired: true,
       user: {
-        id: data.user.id,
-        email: data.user.email ?? email,
+        id: data.user?.id ?? 'pending',
+        email,
       },
     };
   }
@@ -128,8 +121,10 @@ export class AuthService {
   async login(dto: LoginDto): Promise<AuthSession> {
     const email = this.normalizeEmail(dto.email);
 
-    this.logger.log(`Intento de login para: ${email}`);
-    const supabase = this.supabaseService.createAuthClient();
+    this.logger.log(
+      `Intento de login (email_hash=${this.rateLimitService.hashIdentifier(email)})`,
+    );
+    const supabase = this.supabaseService.createPublicAuthClient();
 
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -137,7 +132,9 @@ export class AuthService {
     });
 
     if (error || !data.session || !data.user) {
-      this.logger.warn(`Login fallido para ${email}: ${error?.message}`);
+      this.logger.warn(
+        `Login fallido (email_hash=${this.rateLimitService.hashIdentifier(email)}): ${error?.message}`,
+      );
       this.securityEventsService.logLoginFailed(email, error?.message);
       if (error?.message.toLowerCase().includes('email not confirmed')) {
         throw new UnauthorizedException(
@@ -151,7 +148,9 @@ export class AuthService {
     }
 
     if (!data.user.email_confirmed_at) {
-      this.logger.warn(`Login bloqueado para ${email}: email no confirmado`);
+      this.logger.warn(
+        `Login bloqueado (email_hash=${this.rateLimitService.hashIdentifier(email)}): email no confirmado`,
+      );
       this.securityEventsService.logLoginFailed(email, 'email no confirmado');
       throw new UnauthorizedException(
         'Debes confirmar tu correo antes de iniciar sesión.',
@@ -183,7 +182,7 @@ export class AuthService {
   // ─────────────────────────────────────────────────────────────────────────
   async refresh(dto: RefreshDto): Promise<AuthSession> {
     this.logger.log('Refrescando sesión...');
-    const supabase = this.supabaseService.createAuthClient();
+    const supabase = this.supabaseService.createPublicAuthClient();
 
     const { data, error } = await supabase.auth.refreshSession({
       refresh_token: dto.refresh_token,
@@ -334,77 +333,6 @@ export class AuthService {
     );
   }
 
-  private isAlreadyRegisteredError(message?: string): boolean {
-    const normalized = message?.toLowerCase() ?? '';
-    return normalized.includes('already') || normalized.includes('registered');
-  }
-
-  private async findAuthUserByEmail(email: string): Promise<User | null> {
-    const supabase = this.supabaseService.createAuthClient();
-    const perPage = 1000;
-
-    for (let page = 1; page <= 5; page += 1) {
-      const { data, error } = await supabase.auth.admin.listUsers({
-        page,
-        perPage,
-      });
-
-      if (error) {
-        this.logger.warn(
-          `No se pudo verificar existencia del correo en Auth: ${error.message}`,
-        );
-        return this.findProfileAuthFallback(email);
-      }
-
-      const found = data.users.find(
-        (user) => user.email?.toLowerCase() === email,
-      );
-      if (found) return found;
-      if (data.users.length < perPage) return null;
-    }
-
-    return this.findProfileAuthFallback(email);
-  }
-
-  private async findProfileAuthFallback(email: string): Promise<User | null> {
-    const supabase = this.supabaseService.getClient();
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id,email')
-      .ilike('email', email)
-      .limit(1)
-      .maybeSingle();
-
-    if (error || !data) return null;
-
-    return {
-      id: data.id,
-      email: data.email ?? email,
-      app_metadata: {},
-      user_metadata: {},
-      aud: 'authenticated',
-      confirmed_at: new Date(0).toISOString(),
-      email_confirmed_at: new Date(0).toISOString(),
-      created_at: new Date(0).toISOString(),
-    };
-  }
-
-  private throwEmailAlreadyRegistered(user: User): never {
-    if (!user.email_confirmed_at && !user.confirmed_at) {
-      throw new ConflictException({
-        code: 'EMAIL_PENDING_CONFIRMATION',
-        message:
-          'Ese correo ya tiene una cuenta pendiente de confirmación. Puedes reenviar el correo de confirmación.',
-      });
-    }
-
-    throw new ConflictException({
-      code: 'EMAIL_ALREADY_REGISTERED',
-      message:
-        'Ese correo ya tiene una cuenta. Inicia sesión o recupera tu contraseña.',
-    });
-  }
-
   private generateInviteCode(): string {
     const alphabet = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     let code = '';
@@ -421,20 +349,19 @@ export class AuthService {
   // Invalida el token activo en Supabase Auth.
   // ─────────────────────────────────────────────────────────────────────────
   async logout(accessToken: string): Promise<{ message: string }> {
-    this.logger.log('Cerrando sesión...');
-    const supabase = this.supabaseService.getClient();
-
-    // Necesitamos setear el token del usuario para invalidar SOLO su sesión
-    const { error } = await supabase.auth.admin.signOut(accessToken);
-
-    if (error) {
-      this.logger.error(`Error en logout: ${error.message}`);
-      throw new InternalServerErrorException(
-        `Error al cerrar sesión: ${error.message}`,
-      );
+    if (!accessToken) {
+      return { message: 'Sesión cerrada' };
     }
 
-    this.logger.log('Sesión cerrada exitosamente');
+    this.logger.log('Cerrando sesión (scope=local)');
+    const supabase = this.supabaseService.createAdminAuthClient();
+    const { error } = await supabase.auth.admin.signOut(accessToken, 'local');
+
+    if (error) {
+      this.logger.warn(`Error en logout: ${error.message}`);
+      return { message: 'Sesión cerrada (con advertencias)' };
+    }
+
     return { message: 'Sesión cerrada correctamente' };
   }
 
@@ -618,8 +545,10 @@ export class AuthService {
   async forgotPassword(dto: ForgotPasswordDto): Promise<{ message: string }> {
     const email = this.normalizeEmail(dto.email);
 
-    this.logger.log(`Solicitud de recuperación para: ${email}`);
-    const supabase = this.supabaseService.createAuthClient();
+    this.logger.log(
+      `Solicitud de recuperación (email_hash=${this.rateLimitService.hashIdentifier(email)})`,
+    );
+    const supabase = this.supabaseService.createPublicAuthClient();
 
     const redirectTo = this.resolvePasswordResetRedirect(dto.redirect_to);
 
@@ -634,20 +563,9 @@ export class AuthService {
     };
   }
 
-  private resolvePasswordResetRedirect(redirectTo?: string): string {
+  private resolvePasswordResetRedirect(_redirectTo?: string): string {
     const allowedBase = this.getAllowedFrontendBaseUrl();
-    const allowed = new URL(allowedBase);
-    const requested = redirectTo
-      ? this.parseRedirectUrl(redirectTo)
-      : new URL('/update-password', allowed);
-
-    if (requested.origin !== allowed.origin) {
-      throw new BadRequestException(
-        'redirect_to no está en el dominio permitido',
-      );
-    }
-
-    return requested.toString();
+    return new URL('/update-password', allowedBase).toString();
   }
 
   private getAllowedFrontendBaseUrl(): string {
@@ -669,19 +587,11 @@ export class AuthService {
     }
   }
 
-  private parseRedirectUrl(redirectTo: string): URL {
-    try {
-      return new URL(redirectTo);
-    } catch {
-      throw new BadRequestException('redirect_to no es una URL válida');
-    }
-  }
-
   async resendConfirmation(
     dto: ResendConfirmationDto,
   ): Promise<{ message: string }> {
     const email = this.normalizeEmail(dto.email);
-    const supabase = this.supabaseService.createAuthClient();
+    const supabase = this.supabaseService.createPublicAuthClient();
     const { error } = await supabase.auth.resend({
       type: 'signup',
       email,
@@ -689,7 +599,7 @@ export class AuthService {
 
     if (error) {
       this.logger.warn(
-        `No se pudo reenviar confirmación a ${email}: ${error.message}`,
+        `No se pudo reenviar confirmación (email_hash=${this.rateLimitService.hashIdentifier(email)}): ${error.message}`,
       );
     }
 
@@ -699,29 +609,109 @@ export class AuthService {
     };
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // PUT /auth/update-password
-  // Actualiza la contraseña del usuario autenticado.
-  // Requiere el access_token de recuperación (extraído del hash de la URL
-  // de redirección del email) como Bearer token.
-  // ─────────────────────────────────────────────────────────────────────────
   async updatePassword(
     userId: string,
+    userEmail: string,
     dto: UpdatePasswordDto,
   ): Promise<{ message: string }> {
-    this.logger.log(`Actualizando contraseña para usuario: ${userId}`);
-    const supabase = this.supabaseService.getClient();
+    this.logger.log(
+      `Actualizando contraseña para usuario: ${this.userIdPrefix(userId)}`,
+    );
 
-    const { error } = await supabase.auth.admin.updateUserById(userId, {
-      password: dto.new_password,
-    });
-
-    if (error) {
-      this.logger.error(`Error actualizando contraseña: ${error.message}`);
-      throw new UnauthorizedException('No se pudo actualizar la contraseña');
+    if (dto.current_password === dto.new_password) {
+      throw new BadRequestException(
+        'La nueva contraseña debe ser distinta de la actual',
+      );
     }
 
-    this.logger.log(`Contraseña actualizada para usuario: ${userId}`);
+    const publicClient = this.supabaseService.createPublicAuthClient();
+    const { error: reauthError } = await publicClient.auth.signInWithPassword({
+      email: userEmail,
+      password: dto.current_password,
+    });
+
+    if (reauthError) {
+      this.securityEventsService.logLoginFailed(
+        userEmail,
+        'password_update_reauth_failed',
+      );
+      throw new UnauthorizedException('La contraseña actual no es válida');
+    }
+
+    const adminClient = this.supabaseService.createAdminAuthClient();
+    const { error: updateError } = await adminClient.auth.admin.updateUserById(
+      userId,
+      { password: dto.new_password },
+    );
+
+    if (updateError) {
+      this.logger.error(
+        `Error actualizando contraseña: ${updateError.message}`,
+      );
+      throw new InternalServerErrorException(
+        'No se pudo actualizar la contraseña',
+      );
+    }
+
+    const { error: signOutError } = await adminClient.auth.admin.signOut(
+      userId,
+      'global',
+    );
+    if (signOutError) {
+      this.logger.warn(
+        `No se pudieron invalidar sesiones tras update-password: ${signOutError.message}`,
+      );
+    }
+
+    this.logger.log(
+      `Contraseña actualizada para usuario: ${this.userIdPrefix(userId)}`,
+    );
     return { message: 'Contraseña actualizada correctamente' };
+  }
+
+  private userIdPrefix(userId: string): string {
+    return userId.slice(0, 8);
+  }
+
+  async resetPassword(
+    dto: ResetPasswordDto,
+  ): Promise<{ message: string }> {
+    const publicClient = this.supabaseService.createPublicAuthClient();
+    const { data: userData, error: getUserError } =
+      await publicClient.auth.getUser(dto.access_token);
+
+    if (getUserError || !userData?.user) {
+      this.logger.warn(
+        `Reset-password rechazado: token inválido (${getUserError?.message ?? 'sin detalle'})`,
+      );
+      throw new UnauthorizedException('Enlace de recuperación inválido o expirado');
+    }
+
+    const userId = userData.user.id;
+    const adminClient = this.supabaseService.createAdminAuthClient();
+    const { error: updateError } = await adminClient.auth.admin.updateUserById(
+      userId,
+      { password: dto.new_password },
+    );
+
+    if (updateError) {
+      this.logger.error(`Error en reset-password: ${updateError.message}`);
+      throw new InternalServerErrorException('No se pudo actualizar la contraseña');
+    }
+
+    const { error: signOutError } = await adminClient.auth.admin.signOut(
+      userId,
+      'global',
+    );
+    if (signOutError) {
+      this.logger.warn(
+        `No se pudieron invalidar sesiones tras reset-password: ${signOutError.message}`,
+      );
+    }
+
+    this.logger.log(
+      `Reset-password completado para usuario ${this.userIdPrefix(userId)}`,
+    );
+    return { message: 'Contraseña restablecida correctamente' };
   }
 }

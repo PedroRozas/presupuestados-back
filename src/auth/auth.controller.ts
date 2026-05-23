@@ -21,6 +21,7 @@ import { RefreshDto } from './dto/refresh.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { ForgotPasswordDto } from './dto/forgot-password.dto.js';
 import { UpdatePasswordDto } from './dto/update-password.dto.js';
+import { ResetPasswordDto } from './dto/reset-password.dto.js';
 import { ResendConfirmationDto } from './dto/resend-confirmation.dto.js';
 import { RateLimit } from '../security/decorators/rate-limit.decorator.js';
 
@@ -136,14 +137,17 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthGuard)
-  logout(
+  async logout(
     @Req() req: Request & { user: AuthenticatedUser },
     @Res({ passthrough: true }) res: Response,
   ) {
     const token =
       getBearerToken(req) ?? getCookie(req, ACCESS_TOKEN_COOKIE) ?? '';
-    clearAuthCookies(res);
-    return this.authService.logout(token);
+    try {
+      return await this.authService.logout(token);
+    } finally {
+      clearAuthCookies(res);
+    }
   }
 
   /**
@@ -164,6 +168,7 @@ export class AuthController {
    * Requiere Bearer token válido.
    */
   @Post('initialize')
+  @RateLimit('authInitialize')
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthGuard)
   initializeUserData(
@@ -196,18 +201,28 @@ export class AuthController {
     return this.authService.resendConfirmation(dto);
   }
 
-  /**
-   * PUT /auth/update-password
-   * Actualiza la contraseña del usuario autenticado.
-   * Usar el access_token de recuperación (del hash de la URL del email) como Bearer.
-   */
   @Put('update-password')
+  @RateLimit('passwordUpdate')
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthGuard)
-  updatePassword(
+  async updatePassword(
     @Body() dto: UpdatePasswordDto,
     @Req() req: Request & { user: AuthenticatedUser },
+    @Res({ passthrough: true }) res: Response,
   ) {
-    return this.authService.updatePassword(req.user.id, dto);
+    const result = await this.authService.updatePassword(
+      req.user.id,
+      req.user.email,
+      dto,
+    );
+    clearAuthCookies(res);
+    return result;
+  }
+
+  @Post('reset-password')
+  @RateLimit('passwordUpdate')
+  @HttpCode(HttpStatus.OK)
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto);
   }
 }

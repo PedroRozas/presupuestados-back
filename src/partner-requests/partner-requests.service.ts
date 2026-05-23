@@ -77,7 +77,7 @@ export class PartnerRequestsService {
       .from(partnerRequests)
       .where(
         and(
-          eq(partnerRequests.receiverEmail, userEmail),
+          eq(partnerRequests.receiverEmail, userEmail.toLowerCase()),
           eq(partnerRequests.status, 'pending'),
         ),
       );
