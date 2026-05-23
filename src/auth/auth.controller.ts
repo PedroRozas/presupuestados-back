@@ -21,6 +21,7 @@ import { RefreshDto } from './dto/refresh.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { ForgotPasswordDto } from './dto/forgot-password.dto.js';
 import { UpdatePasswordDto } from './dto/update-password.dto.js';
+import { ResetPasswordDto } from './dto/reset-password.dto.js';
 import { ResendConfirmationDto } from './dto/resend-confirmation.dto.js';
 import { RateLimit } from '../security/decorators/rate-limit.decorator.js';
 
@@ -212,5 +213,12 @@ export class AuthController {
     );
     clearAuthCookies(res);
     return result;
+  }
+
+  @Post('reset-password')
+  @RateLimit('passwordUpdate')
+  @HttpCode(HttpStatus.OK)
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto);
   }
 }

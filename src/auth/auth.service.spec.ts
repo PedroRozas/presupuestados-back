@@ -339,6 +339,130 @@ describe('AuthService', () => {
     });
   });
 
+  describe('resetPassword', () => {
+    const resetUserId = 'user-1';
+    const accessToken = 'access-token-1234567890';
+    const newPassword = 'nuevaContraseña123';
+
+    interface ResetPasswordMocks {
+      getUser: jest.Mock;
+      updateUserById: jest.Mock;
+      signOut: jest.Mock;
+    }
+
+    const createResetPasswordService = (
+      overrides: Partial<{
+        getUser: jest.Mock;
+        updateUserById: jest.Mock;
+        signOut: jest.Mock;
+      }> = {},
+    ): { service: AuthService; mocks: ResetPasswordMocks } => {
+      const getUser =
+        overrides.getUser ??
+        jest.fn().mockResolvedValue({
+          data: { user: { id: resetUserId } },
+          error: null,
+        });
+      const updateUserById =
+        overrides.updateUserById ??
+        jest.fn().mockResolvedValue({ data: {}, error: null });
+      const signOut =
+        overrides.signOut ?? jest.fn().mockResolvedValue({ error: null });
+
+      const supabaseClient = {
+        auth: {
+          getUser,
+          admin: {
+            updateUserById,
+            signOut,
+          },
+        },
+      };
+
+      const service = new AuthService(
+        {
+          createPublicAuthClient: jest.fn().mockReturnValue(supabaseClient),
+          createAdminAuthClient: jest.fn().mockReturnValue(supabaseClient),
+          getClient: jest.fn().mockReturnValue({ from: jest.fn() }),
+        } as never,
+        { joinCouple: jest.fn() } as never,
+        { logLoginFailed: jest.fn() } as never,
+      );
+
+      return { service, mocks: { getUser, updateUserById, signOut } };
+    };
+
+    it('throws UnauthorizedException when access_token is invalid and skips admin update', async () => {
+      const { service, mocks } = createResetPasswordService({
+        getUser: jest
+          .fn()
+          .mockResolvedValue({ data: { user: null }, error: { message: 'invalid' } }),
+      });
+
+      await expect(
+        service.resetPassword({
+          access_token: accessToken,
+          new_password: newPassword,
+        }),
+      ).rejects.toThrow(
+        new UnauthorizedException('Enlace de recuperación inválido o expirado'),
+      );
+
+      expect(mocks.updateUserById).not.toHaveBeenCalled();
+      expect(mocks.signOut).not.toHaveBeenCalled();
+    });
+
+    it('throws InternalServerErrorException when admin update fails', async () => {
+      const { service, mocks } = createResetPasswordService({
+        updateUserById: jest
+          .fn()
+          .mockResolvedValue({ data: {}, error: { message: 'db error' } }),
+      });
+
+      await expect(
+        service.resetPassword({
+          access_token: accessToken,
+          new_password: newPassword,
+        }),
+      ).rejects.toBeInstanceOf(InternalServerErrorException);
+
+      expect(mocks.signOut).not.toHaveBeenCalled();
+    });
+
+    it('resets password, signs out globally and returns success message', async () => {
+      const { service, mocks } = createResetPasswordService();
+
+      const result = await service.resetPassword({
+        access_token: accessToken,
+        new_password: newPassword,
+      });
+
+      expect(result).toEqual({
+        message: 'Contraseña restablecida correctamente',
+      });
+      expect(mocks.updateUserById).toHaveBeenCalledWith(resetUserId, {
+        password: newPassword,
+      });
+      expect(mocks.signOut).toHaveBeenCalledWith(resetUserId, 'global');
+    });
+
+    it('resolves successfully when signOut fails after a successful reset', async () => {
+      const { service, mocks } = createResetPasswordService({
+        signOut: jest.fn().mockResolvedValue({ error: { message: 'bad' } }),
+      });
+
+      await expect(
+        service.resetPassword({
+          access_token: accessToken,
+          new_password: newPassword,
+        }),
+      ).resolves.toEqual({ message: 'Contraseña restablecida correctamente' });
+
+      expect(mocks.updateUserById).toHaveBeenCalledTimes(1);
+      expect(mocks.signOut).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('uses CORS_ORIGIN as redirect allowlist when FRONTEND_URL is not configured', async () => {
     delete process.env['FRONTEND_URL'];
     process.env['CORS_ORIGIN'] = 'http://localhost:3001';

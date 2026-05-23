@@ -17,6 +17,7 @@ import { RegisterDto } from './dto/register.dto.js';
 import { RefreshDto } from './dto/refresh.dto.js';
 import { ForgotPasswordDto } from './dto/forgot-password.dto.js';
 import { UpdatePasswordDto } from './dto/update-password.dto.js';
+import { ResetPasswordDto } from './dto/reset-password.dto.js';
 import { ResendConfirmationDto } from './dto/resend-confirmation.dto.js';
 import { SecurityEventsService } from '../security/security-events.service.js';
 
@@ -761,5 +762,47 @@ export class AuthService {
 
   private userIdPrefix(userId: string): string {
     return userId.slice(0, 8);
+  }
+
+  async resetPassword(
+    dto: ResetPasswordDto,
+  ): Promise<{ message: string }> {
+    const publicClient = this.supabaseService.createPublicAuthClient();
+    const { data: userData, error: getUserError } =
+      await publicClient.auth.getUser(dto.access_token);
+
+    if (getUserError || !userData?.user) {
+      this.logger.warn(
+        `Reset-password rechazado: token inválido (${getUserError?.message ?? 'sin detalle'})`,
+      );
+      throw new UnauthorizedException('Enlace de recuperación inválido o expirado');
+    }
+
+    const userId = userData.user.id;
+    const adminClient = this.supabaseService.createAdminAuthClient();
+    const { error: updateError } = await adminClient.auth.admin.updateUserById(
+      userId,
+      { password: dto.new_password },
+    );
+
+    if (updateError) {
+      this.logger.error(`Error en reset-password: ${updateError.message}`);
+      throw new InternalServerErrorException('No se pudo actualizar la contraseña');
+    }
+
+    const { error: signOutError } = await adminClient.auth.admin.signOut(
+      userId,
+      'global',
+    );
+    if (signOutError) {
+      this.logger.warn(
+        `No se pudieron invalidar sesiones tras reset-password: ${signOutError.message}`,
+      );
+    }
+
+    this.logger.log(
+      `Reset-password completado para usuario ${this.userIdPrefix(userId)}`,
+    );
+    return { message: 'Contraseña restablecida correctamente' };
   }
 }
