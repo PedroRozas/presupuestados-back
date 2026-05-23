@@ -7,7 +7,6 @@ import {
   Logger,
   UnauthorizedException,
 } from '@nestjs/common';
-import type { User } from '@supabase/supabase-js';
 import { randomInt } from 'crypto';
 import { SupabaseService } from '../supabase/supabase.service.js';
 import { CouplesService } from '../couples/couples.service.js';
@@ -20,6 +19,7 @@ import { UpdatePasswordDto } from './dto/update-password.dto.js';
 import { ResetPasswordDto } from './dto/reset-password.dto.js';
 import { ResendConfirmationDto } from './dto/resend-confirmation.dto.js';
 import { SecurityEventsService } from '../security/security-events.service.js';
+import { RateLimitService } from '../security/rate-limit.service.js';
 
 export interface AuthSession {
   access_token: string;
@@ -53,27 +53,21 @@ export class AuthService {
     private readonly supabaseService: SupabaseService,
     private readonly couplesService: CouplesService,
     private readonly securityEventsService: SecurityEventsService,
+    private readonly rateLimitService: RateLimitService,
   ) {}
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // POST /auth/register
-  // Crea un nuevo usuario en Supabase Auth.
-  // ─────────────────────────────────────────────────────────────────────────
   async register(dto: RegisterDto): Promise<RegisterResponse> {
     const email = this.normalizeEmail(dto.email);
     const fullName = dto.full_name.trim();
     const inviteCode = this.normalizeInviteCode(dto.invite_code);
 
-    this.logger.log(`Registrando nuevo usuario: ${email}`);
-    const authClient = this.supabaseService.createPublicAuthClient();
-    const existingUser = await this.findAuthUserByEmail(email);
-
-    if (existingUser) {
-      this.throwEmailAlreadyRegistered(existingUser);
-    }
+    this.logger.log(
+      `Solicitud de registro recibida (hash=${this.rateLimitService.hashIdentifier(email)})`,
+    );
 
     await this.assertInviteCodeCanBeUsedForRegistration(inviteCode);
 
+    const authClient = this.supabaseService.createPublicAuthClient();
     const { data, error } = await authClient.auth.signUp({
       email,
       password: dto.password,
@@ -85,38 +79,36 @@ export class AuthService {
       },
     });
 
-    if (error || !data.user) {
-      this.logger.error(`Error en registro: ${error?.message}`);
-      if (this.isAlreadyRegisteredError(error?.message)) {
-        throw new ConflictException({
-          code: 'EMAIL_ALREADY_REGISTERED',
-          message:
-            'Ese correo ya tiene una cuenta. Inicia sesión o recupera tu contraseña.',
-        });
-      }
+    if (error) {
+      this.logger.error(`Error en signUp: ${error.message}`);
       throw new InternalServerErrorException(
-        error?.message ?? 'Error al registrar el usuario',
+        'No se pudo procesar el registro. Inténtalo más tarde.',
       );
     }
 
-    if (data.user.identities?.length === 0) {
-      throw new ConflictException({
-        code: 'EMAIL_ALREADY_REGISTERED',
-        message:
-          'Ese correo ya tiene una cuenta. Inicia sesión o recupera tu contraseña.',
+    if (data.user && data.user.identities?.length === 0) {
+      this.logger.log(
+        'Registro de email ya existente: reenviando confirmación de forma silenciosa',
+      );
+      const resendClient = this.supabaseService.createPublicAuthClient();
+      const { error: resendError } = await resendClient.auth.resend({
+        type: 'signup',
+        email,
       });
+      if (resendError) {
+        this.logger.warn(
+          `Resend silencioso falló: ${resendError.message}`,
+        );
+      }
     }
 
-    this.logger.log(
-      `Usuario registrado, pendiente de confirmación: ${data.user.id}`,
-    );
     return {
       message:
-        'Revisa tu correo para confirmar tu cuenta antes de iniciar sesión.',
+        'Si el correo no estaba registrado, recibirás un email para confirmar tu cuenta.',
       emailConfirmationRequired: true,
       user: {
-        id: data.user.id,
-        email: data.user.email ?? email,
+        id: data.user?.id ?? 'pending',
+        email,
       },
     };
   }
@@ -333,77 +325,6 @@ export class AuthService {
       'code' in response &&
       response.code === 'INVITE_CODE_INVALID'
     );
-  }
-
-  private isAlreadyRegisteredError(message?: string): boolean {
-    const normalized = message?.toLowerCase() ?? '';
-    return normalized.includes('already') || normalized.includes('registered');
-  }
-
-  private async findAuthUserByEmail(email: string): Promise<User | null> {
-    const supabase = this.supabaseService.createAdminAuthClient();
-    const perPage = 1000;
-
-    for (let page = 1; page <= 5; page += 1) {
-      const { data, error } = await supabase.auth.admin.listUsers({
-        page,
-        perPage,
-      });
-
-      if (error) {
-        this.logger.warn(
-          `No se pudo verificar existencia del correo en Auth: ${error.message}`,
-        );
-        return this.findProfileAuthFallback(email);
-      }
-
-      const found = data.users.find(
-        (user) => user.email?.toLowerCase() === email,
-      );
-      if (found) return found;
-      if (data.users.length < perPage) return null;
-    }
-
-    return this.findProfileAuthFallback(email);
-  }
-
-  private async findProfileAuthFallback(email: string): Promise<User | null> {
-    const supabase = this.supabaseService.getClient();
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id,email')
-      .ilike('email', email)
-      .limit(1)
-      .maybeSingle();
-
-    if (error || !data) return null;
-
-    return {
-      id: data.id,
-      email: data.email ?? email,
-      app_metadata: {},
-      user_metadata: {},
-      aud: 'authenticated',
-      confirmed_at: new Date(0).toISOString(),
-      email_confirmed_at: new Date(0).toISOString(),
-      created_at: new Date(0).toISOString(),
-    };
-  }
-
-  private throwEmailAlreadyRegistered(user: User): never {
-    if (!user.email_confirmed_at && !user.confirmed_at) {
-      throw new ConflictException({
-        code: 'EMAIL_PENDING_CONFIRMATION',
-        message:
-          'Ese correo ya tiene una cuenta pendiente de confirmación. Puedes reenviar el correo de confirmación.',
-      });
-    }
-
-    throw new ConflictException({
-      code: 'EMAIL_ALREADY_REGISTERED',
-      message:
-        'Ese correo ya tiene una cuenta. Inicia sesión o recupera tu contraseña.',
-    });
   }
 
   private generateInviteCode(): string {

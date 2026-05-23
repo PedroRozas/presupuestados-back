@@ -50,6 +50,7 @@ describe('AuthService', () => {
       } as never,
       (couplesService ?? { joinCouple: jest.fn() }) as never,
       { logLoginFailed: jest.fn() } as never,
+      { hashIdentifier: jest.fn().mockReturnValue('hash') } as never,
     );
 
     return { service, authClient: resolvedAuthClient };
@@ -241,6 +242,7 @@ describe('AuthService', () => {
         } as never,
         { joinCouple: jest.fn() } as never,
         { logLoginFailed } as never,
+        { hashIdentifier: jest.fn().mockReturnValue('hash') } as never,
       );
 
       return {
@@ -387,6 +389,7 @@ describe('AuthService', () => {
         } as never,
         { joinCouple: jest.fn() } as never,
         { logLoginFailed: jest.fn() } as never,
+        { hashIdentifier: jest.fn().mockReturnValue('hash') } as never,
       );
 
       return { service, mocks: { getUser, updateUserById, signOut } };
