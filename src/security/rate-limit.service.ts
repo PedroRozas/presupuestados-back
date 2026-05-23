@@ -22,18 +22,19 @@ export class RateLimitService {
     private readonly redisService: RedisService,
     private readonly securityEventsService: SecurityEventsService,
   ) {
-    this.hashSalt =
-      this.configService.get<string>('RATE_LIMIT_HASH_SALT') ??
-      'presupuestados-dev-rate-limit-salt';
+    const configuredSalt = this.configService.get<string>(
+      'RATE_LIMIT_HASH_SALT',
+    );
+    const isProduction =
+      this.configService.get<string>('NODE_ENV') === 'production';
 
-    if (
-      !this.configService.get<string>('RATE_LIMIT_HASH_SALT') &&
-      this.configService.get<string>('NODE_ENV') === 'production'
-    ) {
-      this.logger.warn(
-        'RATE_LIMIT_HASH_SALT no está configurado en producción.',
+    if (isProduction && !configuredSalt) {
+      throw new Error(
+        'RATE_LIMIT_HASH_SALT es obligatorio en producción. Configurar antes de iniciar el servicio.',
       );
     }
+
+    this.hashSalt = configuredSalt ?? 'presupuestados-dev-rate-limit-salt';
   }
 
   async checkGlobalLimit(request: RateLimitRequest): Promise<RateLimitResult> {
