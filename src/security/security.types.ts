@@ -6,6 +6,9 @@ export type RateLimitPolicy =
   | 'passwordReset'
   | 'passwordUpdate'
   | 'authRefresh'
+  | 'authInitialize'
+  | 'coupleJoin'
+  | 'partnerInvite'
   | 'chatbot'
   | 'ai';
 
@@ -16,6 +19,9 @@ export type RateLimitScope =
   | 'password_reset'
   | 'password_update'
   | 'auth_refresh'
+  | 'auth_initialize'
+  | 'couple_join'
+  | 'partner_invite'
   | 'chatbot'
   | 'ai';
 

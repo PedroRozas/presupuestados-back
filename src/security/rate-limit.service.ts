@@ -339,6 +339,71 @@ export class RateLimitService {
             eventType: 'rate_limit_exceeded',
           },
         ];
+      case 'authInitialize':
+        return [
+          {
+            scope: 'auth_initialize',
+            routeKey: 'auth:initialize',
+            identity: 'user',
+            windowSeconds: this.getNumber(
+              'RATE_LIMIT_AUTH_INITIALIZE_WINDOW_SECONDS',
+              DEFAULT_RATE_LIMITS.authInitializeWindowSeconds,
+            ),
+            max: this.getNumber(
+              'RATE_LIMIT_AUTH_INITIALIZE_USER_MAX',
+              DEFAULT_RATE_LIMITS.authInitializeUserMax,
+            ),
+            eventType: 'rate_limit_exceeded',
+          },
+        ];
+      case 'coupleJoin':
+        return [
+          {
+            scope: 'couple_join',
+            routeKey: 'couples:join',
+            identity: 'user',
+            windowSeconds: this.getNumber(
+              'RATE_LIMIT_COUPLE_JOIN_WINDOW_SECONDS',
+              DEFAULT_RATE_LIMITS.coupleJoinWindowSeconds,
+            ),
+            max: this.getNumber(
+              'RATE_LIMIT_COUPLE_JOIN_USER_MAX',
+              DEFAULT_RATE_LIMITS.coupleJoinUserMax,
+            ),
+            eventType: 'rate_limit_exceeded',
+          },
+          {
+            scope: 'couple_join',
+            routeKey: 'couples:join',
+            identity: 'ip',
+            windowSeconds: this.getNumber(
+              'RATE_LIMIT_COUPLE_JOIN_WINDOW_SECONDS',
+              DEFAULT_RATE_LIMITS.coupleJoinWindowSeconds,
+            ),
+            max: this.getNumber(
+              'RATE_LIMIT_COUPLE_JOIN_IP_MAX',
+              DEFAULT_RATE_LIMITS.coupleJoinIpMax,
+            ),
+            eventType: 'rate_limit_exceeded',
+          },
+        ];
+      case 'partnerInvite':
+        return [
+          {
+            scope: 'partner_invite',
+            routeKey: 'partner-requests:send',
+            identity: 'user',
+            windowSeconds: this.getNumber(
+              'RATE_LIMIT_PARTNER_INVITE_WINDOW_SECONDS',
+              DEFAULT_RATE_LIMITS.partnerInviteWindowSeconds,
+            ),
+            max: this.getNumber(
+              'RATE_LIMIT_PARTNER_INVITE_USER_MAX',
+              DEFAULT_RATE_LIMITS.partnerInviteUserMax,
+            ),
+            eventType: 'rate_limit_exceeded',
+          },
+        ];
       case 'chatbot':
         return [
           {

@@ -165,6 +165,7 @@ export class AuthController {
    * Requiere Bearer token válido.
    */
   @Post('initialize')
+  @RateLimit('authInitialize')
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthGuard)
   initializeUserData(

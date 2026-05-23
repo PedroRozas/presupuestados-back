@@ -3,6 +3,7 @@ import { Request } from 'express';
 import { AuthGuard, AuthenticatedUser } from '../common/guards/auth.guard.js';
 import { CouplesService } from './couples.service.js';
 import { JoinCoupleDto } from './dto/join-couple.dto.js';
+import { RateLimit } from '../security/decorators/rate-limit.decorator.js';
 
 @Controller('couples')
 export class CouplesController {
@@ -14,6 +15,7 @@ export class CouplesController {
    * Requiere Bearer token de Supabase Auth en el header Authorization.
    */
   @Post('join')
+  @RateLimit('coupleJoin')
   @UseGuards(AuthGuard)
   async joinCouple(
     @Body() dto: JoinCoupleDto,

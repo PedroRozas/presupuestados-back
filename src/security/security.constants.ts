@@ -26,6 +26,13 @@ export const DEFAULT_RATE_LIMITS = {
   aiUserMax: 5,
   aiIpWindowSeconds: 900,
   aiIpMax: 10,
+  authInitializeWindowSeconds: 3600,
+  authInitializeUserMax: 10,
+  coupleJoinWindowSeconds: 900,
+  coupleJoinUserMax: 5,
+  coupleJoinIpMax: 10,
+  partnerInviteWindowSeconds: 3600,
+  partnerInviteUserMax: 10,
 } as const;
 
 export const RATE_LIMIT_ERROR_CODE = 'RATE_LIMIT_EXCEEDED';
