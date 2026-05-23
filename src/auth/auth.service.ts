@@ -121,7 +121,9 @@ export class AuthService {
   async login(dto: LoginDto): Promise<AuthSession> {
     const email = this.normalizeEmail(dto.email);
 
-    this.logger.log(`Intento de login para: ${email}`);
+    this.logger.log(
+      `Intento de login (email_hash=${this.rateLimitService.hashIdentifier(email)})`,
+    );
     const supabase = this.supabaseService.createPublicAuthClient();
 
     const { data, error } = await supabase.auth.signInWithPassword({
@@ -130,7 +132,9 @@ export class AuthService {
     });
 
     if (error || !data.session || !data.user) {
-      this.logger.warn(`Login fallido para ${email}: ${error?.message}`);
+      this.logger.warn(
+        `Login fallido (email_hash=${this.rateLimitService.hashIdentifier(email)}): ${error?.message}`,
+      );
       this.securityEventsService.logLoginFailed(email, error?.message);
       if (error?.message.toLowerCase().includes('email not confirmed')) {
         throw new UnauthorizedException(
@@ -144,7 +148,9 @@ export class AuthService {
     }
 
     if (!data.user.email_confirmed_at) {
-      this.logger.warn(`Login bloqueado para ${email}: email no confirmado`);
+      this.logger.warn(
+        `Login bloqueado (email_hash=${this.rateLimitService.hashIdentifier(email)}): email no confirmado`,
+      );
       this.securityEventsService.logLoginFailed(email, 'email no confirmado');
       throw new UnauthorizedException(
         'Debes confirmar tu correo antes de iniciar sesión.',
@@ -539,7 +545,9 @@ export class AuthService {
   async forgotPassword(dto: ForgotPasswordDto): Promise<{ message: string }> {
     const email = this.normalizeEmail(dto.email);
 
-    this.logger.log(`Solicitud de recuperación para: ${email}`);
+    this.logger.log(
+      `Solicitud de recuperación (email_hash=${this.rateLimitService.hashIdentifier(email)})`,
+    );
     const supabase = this.supabaseService.createPublicAuthClient();
 
     const redirectTo = this.resolvePasswordResetRedirect(dto.redirect_to);
@@ -610,7 +618,7 @@ export class AuthService {
 
     if (error) {
       this.logger.warn(
-        `No se pudo reenviar confirmación a ${email}: ${error.message}`,
+        `No se pudo reenviar confirmación (email_hash=${this.rateLimitService.hashIdentifier(email)}): ${error.message}`,
       );
     }
 
