@@ -287,6 +287,41 @@ export class RateLimitService {
             eventType: 'password_reset_limited',
           },
         ];
+      case 'passwordUpdate':
+        return [
+          {
+            scope: 'password_update',
+            routeKey: 'auth:update-password',
+            identity: 'user',
+            windowSeconds: this.getNumber(
+              'RATE_LIMIT_PASSWORD_UPDATE_WINDOW_SECONDS',
+              DEFAULT_RATE_LIMITS.passwordUpdateWindowSeconds,
+            ),
+            max: this.getNumber(
+              'RATE_LIMIT_PASSWORD_UPDATE_USER_MAX',
+              DEFAULT_RATE_LIMITS.passwordUpdateUserMax,
+            ),
+            cooldownSeconds: this.getNumber(
+              'RATE_LIMIT_PASSWORD_UPDATE_COOLDOWN_SECONDS',
+              DEFAULT_RATE_LIMITS.passwordUpdateWindowSeconds,
+            ),
+            eventType: 'password_update_limited',
+          },
+          {
+            scope: 'password_update',
+            routeKey: 'auth:update-password',
+            identity: 'ip',
+            windowSeconds: this.getNumber(
+              'RATE_LIMIT_PASSWORD_UPDATE_WINDOW_SECONDS',
+              DEFAULT_RATE_LIMITS.passwordUpdateWindowSeconds,
+            ),
+            max: this.getNumber(
+              'RATE_LIMIT_PASSWORD_UPDATE_IP_MAX',
+              DEFAULT_RATE_LIMITS.passwordUpdateIpMax,
+            ),
+            eventType: 'password_update_limited',
+          },
+        ];
       case 'authRefresh':
         return [
           {

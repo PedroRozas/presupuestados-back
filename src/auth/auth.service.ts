@@ -699,29 +699,67 @@ export class AuthService {
     };
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // PUT /auth/update-password
-  // Actualiza la contraseña del usuario autenticado.
-  // Requiere el access_token de recuperación (extraído del hash de la URL
-  // de redirección del email) como Bearer token.
-  // ─────────────────────────────────────────────────────────────────────────
   async updatePassword(
     userId: string,
+    userEmail: string,
     dto: UpdatePasswordDto,
   ): Promise<{ message: string }> {
-    this.logger.log(`Actualizando contraseña para usuario: ${userId}`);
-    const supabase = this.supabaseService.getClient();
+    this.logger.log(
+      `Actualizando contraseña para usuario: ${this.userIdPrefix(userId)}`,
+    );
 
-    const { error } = await supabase.auth.admin.updateUserById(userId, {
-      password: dto.new_password,
-    });
-
-    if (error) {
-      this.logger.error(`Error actualizando contraseña: ${error.message}`);
-      throw new UnauthorizedException('No se pudo actualizar la contraseña');
+    if (dto.current_password === dto.new_password) {
+      throw new BadRequestException(
+        'La nueva contraseña debe ser distinta de la actual',
+      );
     }
 
-    this.logger.log(`Contraseña actualizada para usuario: ${userId}`);
+    const publicClient = this.supabaseService.createPublicAuthClient();
+    const { error: reauthError } = await publicClient.auth.signInWithPassword({
+      email: userEmail,
+      password: dto.current_password,
+    });
+
+    if (reauthError) {
+      this.securityEventsService.logLoginFailed(
+        userEmail,
+        'password_update_reauth_failed',
+      );
+      throw new UnauthorizedException('La contraseña actual no es válida');
+    }
+
+    const adminClient = this.supabaseService.createAdminAuthClient();
+    const { error: updateError } = await adminClient.auth.admin.updateUserById(
+      userId,
+      { password: dto.new_password },
+    );
+
+    if (updateError) {
+      this.logger.error(
+        `Error actualizando contraseña: ${updateError.message}`,
+      );
+      throw new InternalServerErrorException(
+        'No se pudo actualizar la contraseña',
+      );
+    }
+
+    const { error: signOutError } = await adminClient.auth.admin.signOut(
+      userId,
+      'global',
+    );
+    if (signOutError) {
+      this.logger.warn(
+        `No se pudieron invalidar sesiones tras update-password: ${signOutError.message}`,
+      );
+    }
+
+    this.logger.log(
+      `Contraseña actualizada para usuario: ${this.userIdPrefix(userId)}`,
+    );
     return { message: 'Contraseña actualizada correctamente' };
+  }
+
+  private userIdPrefix(userId: string): string {
+    return userId.slice(0, 8);
   }
 }

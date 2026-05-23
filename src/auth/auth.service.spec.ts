@@ -1,4 +1,9 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  InternalServerErrorException,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { AuthService } from './auth.service.js';
 
 describe('AuthService', () => {
@@ -188,6 +193,150 @@ describe('AuthService', () => {
 
     expect(joinCouple).toHaveBeenCalledWith(userId, 'CHILEZUELA');
     expect(session.user.email).toBe('camartinezcarrasco@gmail.com');
+  });
+
+  describe('updatePassword', () => {
+    const userEmail = 'usuario@ejemplo.com';
+    const updateUserId = 'user-update-1';
+
+    interface UpdatePasswordMocks {
+      signInWithPassword: jest.Mock;
+      updateUserById: jest.Mock;
+      signOut: jest.Mock;
+      logLoginFailed: jest.Mock;
+    }
+
+    const createUpdatePasswordService = (
+      overrides: Partial<{
+        signInWithPassword: jest.Mock;
+        updateUserById: jest.Mock;
+        signOut: jest.Mock;
+      }> = {},
+    ): { service: AuthService; mocks: UpdatePasswordMocks } => {
+      const signInWithPassword =
+        overrides.signInWithPassword ??
+        jest.fn().mockResolvedValue({ data: {}, error: null });
+      const updateUserById =
+        overrides.updateUserById ??
+        jest.fn().mockResolvedValue({ data: {}, error: null });
+      const signOut =
+        overrides.signOut ?? jest.fn().mockResolvedValue({ error: null });
+      const logLoginFailed = jest.fn();
+
+      const supabaseClient = {
+        auth: {
+          signInWithPassword,
+          admin: {
+            updateUserById,
+            signOut,
+          },
+        },
+      };
+
+      const service = new AuthService(
+        {
+          createPublicAuthClient: jest.fn().mockReturnValue(supabaseClient),
+          createAdminAuthClient: jest.fn().mockReturnValue(supabaseClient),
+          getClient: jest.fn().mockReturnValue({ from: jest.fn() }),
+        } as never,
+        { joinCouple: jest.fn() } as never,
+        { logLoginFailed } as never,
+      );
+
+      return {
+        service,
+        mocks: { signInWithPassword, updateUserById, signOut, logLoginFailed },
+      };
+    };
+
+    it('throws BadRequestException when current_password equals new_password and skips reauth', async () => {
+      const { service, mocks } = createUpdatePasswordService();
+
+      await expect(
+        service.updatePassword(updateUserId, userEmail, {
+          current_password: 'misma-pass',
+          new_password: 'misma-pass',
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+
+      expect(mocks.signInWithPassword).not.toHaveBeenCalled();
+      expect(mocks.updateUserById).not.toHaveBeenCalled();
+      expect(mocks.signOut).not.toHaveBeenCalled();
+    });
+
+    it('throws UnauthorizedException and logs security event when reauth fails', async () => {
+      const { service, mocks } = createUpdatePasswordService({
+        signInWithPassword: jest
+          .fn()
+          .mockResolvedValue({ data: {}, error: { message: 'invalid' } }),
+      });
+
+      await expect(
+        service.updatePassword(updateUserId, userEmail, {
+          current_password: 'actual',
+          new_password: 'nueva',
+        }),
+      ).rejects.toThrow(
+        new UnauthorizedException('La contraseña actual no es válida'),
+      );
+
+      expect(mocks.logLoginFailed).toHaveBeenCalledTimes(1);
+      expect(mocks.logLoginFailed).toHaveBeenCalledWith(
+        userEmail,
+        'password_update_reauth_failed',
+      );
+      expect(mocks.updateUserById).not.toHaveBeenCalled();
+    });
+
+    it('throws InternalServerErrorException when admin update fails', async () => {
+      const { service, mocks } = createUpdatePasswordService({
+        updateUserById: jest
+          .fn()
+          .mockResolvedValue({ data: {}, error: { message: 'db error' } }),
+      });
+
+      await expect(
+        service.updatePassword(updateUserId, userEmail, {
+          current_password: 'actual',
+          new_password: 'nueva',
+        }),
+      ).rejects.toBeInstanceOf(InternalServerErrorException);
+
+      expect(mocks.signOut).not.toHaveBeenCalled();
+    });
+
+    it('updates password, signs out globally and returns success message', async () => {
+      const { service, mocks } = createUpdatePasswordService();
+
+      const result = await service.updatePassword(updateUserId, userEmail, {
+        current_password: 'actual',
+        new_password: 'nueva',
+      });
+
+      expect(result).toEqual({
+        message: 'Contraseña actualizada correctamente',
+      });
+      expect(mocks.updateUserById).toHaveBeenCalledWith(updateUserId, {
+        password: 'nueva',
+      });
+      expect(mocks.signOut).toHaveBeenCalledWith(updateUserId, 'global');
+    });
+
+    it('resolves successfully when signOut fails after a successful update', async () => {
+      const { service, mocks } = createUpdatePasswordService({
+        signOut: jest.fn().mockResolvedValue({ error: { message: 'bad' } }),
+      });
+
+      await expect(
+        service.updatePassword(updateUserId, userEmail, {
+          current_password: 'actual',
+          new_password: 'nueva',
+        }),
+      ).resolves.toEqual({ message: 'Contraseña actualizada correctamente' });
+
+      expect(mocks.updateUserById).toHaveBeenCalledTimes(1);
+      expect(mocks.signOut).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('uses CORS_ORIGIN as redirect allowlist when FRONTEND_URL is not configured', async () => {

@@ -4,6 +4,7 @@ export type RateLimitPolicy =
   | 'authLogin'
   | 'authRegister'
   | 'passwordReset'
+  | 'passwordUpdate'
   | 'authRefresh'
   | 'chatbot'
   | 'ai';
@@ -13,6 +14,7 @@ export type RateLimitScope =
   | 'auth_login'
   | 'auth_register'
   | 'password_reset'
+  | 'password_update'
   | 'auth_refresh'
   | 'chatbot'
   | 'ai';
@@ -24,6 +26,7 @@ export type SecurityEventType =
   | 'auth_login_failed'
   | 'auth_login_blocked'
   | 'password_reset_limited'
+  | 'password_update_limited'
   | 'chatbot_rate_limited'
   | 'ai_rate_limited'
   | 'redis_unavailable';

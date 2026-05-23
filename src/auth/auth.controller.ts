@@ -196,18 +196,21 @@ export class AuthController {
     return this.authService.resendConfirmation(dto);
   }
 
-  /**
-   * PUT /auth/update-password
-   * Actualiza la contraseña del usuario autenticado.
-   * Usar el access_token de recuperación (del hash de la URL del email) como Bearer.
-   */
   @Put('update-password')
+  @RateLimit('passwordUpdate')
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthGuard)
-  updatePassword(
+  async updatePassword(
     @Body() dto: UpdatePasswordDto,
     @Req() req: Request & { user: AuthenticatedUser },
+    @Res({ passthrough: true }) res: Response,
   ) {
-    return this.authService.updatePassword(req.user.id, dto);
+    const result = await this.authService.updatePassword(
+      req.user.id,
+      req.user.email,
+      dto,
+    );
+    clearAuthCookies(res);
+    return result;
   }
 }
