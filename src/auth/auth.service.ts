@@ -343,20 +343,19 @@ export class AuthService {
   // Invalida el token activo en Supabase Auth.
   // ─────────────────────────────────────────────────────────────────────────
   async logout(accessToken: string): Promise<{ message: string }> {
-    this.logger.log('Cerrando sesión...');
-    const supabase = this.supabaseService.getClient();
-
-    // Necesitamos setear el token del usuario para invalidar SOLO su sesión
-    const { error } = await supabase.auth.admin.signOut(accessToken);
-
-    if (error) {
-      this.logger.error(`Error en logout: ${error.message}`);
-      throw new InternalServerErrorException(
-        `Error al cerrar sesión: ${error.message}`,
-      );
+    if (!accessToken) {
+      return { message: 'Sesión cerrada' };
     }
 
-    this.logger.log('Sesión cerrada exitosamente');
+    this.logger.log('Cerrando sesión (scope=local)');
+    const supabase = this.supabaseService.createAdminAuthClient();
+    const { error } = await supabase.auth.admin.signOut(accessToken, 'local');
+
+    if (error) {
+      this.logger.warn(`Error en logout: ${error.message}`);
+      return { message: 'Sesión cerrada (con advertencias)' };
+    }
+
     return { message: 'Sesión cerrada correctamente' };
   }
 

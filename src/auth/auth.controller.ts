@@ -137,14 +137,17 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @UseGuards(AuthGuard)
-  logout(
+  async logout(
     @Req() req: Request & { user: AuthenticatedUser },
     @Res({ passthrough: true }) res: Response,
   ) {
     const token =
       getBearerToken(req) ?? getCookie(req, ACCESS_TOKEN_COOKIE) ?? '';
-    clearAuthCookies(res);
-    return this.authService.logout(token);
+    try {
+      return await this.authService.logout(token);
+    } finally {
+      clearAuthCookies(res);
+    }
   }
 
   /**
