@@ -64,7 +64,7 @@ export class AuthService {
     const inviteCode = this.normalizeInviteCode(dto.invite_code);
 
     this.logger.log(`Registrando nuevo usuario: ${email}`);
-    const authClient = this.supabaseService.createAuthClient();
+    const authClient = this.supabaseService.createPublicAuthClient();
     const existingUser = await this.findAuthUserByEmail(email);
 
     if (existingUser) {
@@ -129,7 +129,7 @@ export class AuthService {
     const email = this.normalizeEmail(dto.email);
 
     this.logger.log(`Intento de login para: ${email}`);
-    const supabase = this.supabaseService.createAuthClient();
+    const supabase = this.supabaseService.createPublicAuthClient();
 
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
@@ -183,7 +183,7 @@ export class AuthService {
   // ─────────────────────────────────────────────────────────────────────────
   async refresh(dto: RefreshDto): Promise<AuthSession> {
     this.logger.log('Refrescando sesión...');
-    const supabase = this.supabaseService.createAuthClient();
+    const supabase = this.supabaseService.createPublicAuthClient();
 
     const { data, error } = await supabase.auth.refreshSession({
       refresh_token: dto.refresh_token,
@@ -340,7 +340,7 @@ export class AuthService {
   }
 
   private async findAuthUserByEmail(email: string): Promise<User | null> {
-    const supabase = this.supabaseService.createAuthClient();
+    const supabase = this.supabaseService.createAdminAuthClient();
     const perPage = 1000;
 
     for (let page = 1; page <= 5; page += 1) {
@@ -619,7 +619,7 @@ export class AuthService {
     const email = this.normalizeEmail(dto.email);
 
     this.logger.log(`Solicitud de recuperación para: ${email}`);
-    const supabase = this.supabaseService.createAuthClient();
+    const supabase = this.supabaseService.createPublicAuthClient();
 
     const redirectTo = this.resolvePasswordResetRedirect(dto.redirect_to);
 
@@ -681,7 +681,7 @@ export class AuthService {
     dto: ResendConfirmationDto,
   ): Promise<{ message: string }> {
     const email = this.normalizeEmail(dto.email);
-    const supabase = this.supabaseService.createAuthClient();
+    const supabase = this.supabaseService.createPublicAuthClient();
     const { error } = await supabase.auth.resend({
       type: 'signup',
       email,

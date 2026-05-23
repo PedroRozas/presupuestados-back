@@ -39,7 +39,8 @@ describe('AuthService', () => {
 
     const service = new AuthService(
       {
-        createAuthClient: jest.fn().mockReturnValue(resolvedAuthClient),
+        createPublicAuthClient: jest.fn().mockReturnValue(resolvedAuthClient),
+        createAdminAuthClient: jest.fn().mockReturnValue(resolvedAuthClient),
         getClient: jest.fn().mockReturnValue(dataClient ?? { from: jest.fn() }),
       } as never,
       (couplesService ?? { joinCouple: jest.fn() }) as never,
