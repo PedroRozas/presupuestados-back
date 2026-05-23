@@ -30,7 +30,7 @@ async function bootstrap() {
     }),
   );
   app.use(json({ limit: bodyLimit }));
-  app.use(urlencoded({ extended: true, limit: bodyLimit }));
+  app.use(urlencoded({ extended: false, limit: '100kb' }));
   app.use(cookieParser());
 
   app.enableCors({
