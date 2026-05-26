@@ -4,7 +4,14 @@ import { AppModule } from './app.module.js';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
-import { json, type Express, urlencoded } from 'express';
+import {
+  json,
+  type Express,
+  type NextFunction,
+  type Request,
+  type Response,
+  urlencoded,
+} from 'express';
 
 const parseTrustProxy = (): boolean | number | string => {
   const value = process.env['TRUST_PROXY'];
@@ -36,6 +43,14 @@ async function bootstrap() {
         process.env['NODE_ENV'] === 'production' ? undefined : false,
     }),
   );
+  expressApp.use((_req: Request, res: Response, next: NextFunction) => {
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+    next();
+  });
+  expressApp.get('/robots.txt', (_req: Request, res: Response) => {
+    res.type('text/plain').send('User-agent: *\nDisallow: /\n');
+  });
+
   app.use(json({ limit: bodyLimit }));
   app.use(urlencoded({ extended: false, limit: '100kb' }));
   app.use(cookieParser());
