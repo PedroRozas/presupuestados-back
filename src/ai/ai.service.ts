@@ -99,6 +99,8 @@ export class AIService {
     );
 
     let responseText: string;
+    let responseStatus: string | null = null;
+    let incompleteReason: string | null = null;
     try {
       const response = await this.openai.responses.create({
         model: this.model,
@@ -115,7 +117,7 @@ export class AIService {
             ],
           },
         ],
-        max_output_tokens: 6000,
+        max_output_tokens: 16000,
         store: false,
         text: {
           format: {
@@ -174,6 +176,14 @@ export class AIService {
       });
 
       responseText = response.output_text;
+      responseStatus = response.status ?? null;
+      incompleteReason = response.incomplete_details?.reason ?? null;
+
+      if (responseStatus === 'incomplete') {
+        this.logger.warn(
+          `Respuesta incompleta de OpenAI (reason=${incompleteReason ?? 'desconocido'})`,
+        );
+      }
     } catch (e: unknown) {
       if (!usage.isPremium) {
         await this.aiUsageService.refundUsage(
@@ -192,7 +202,7 @@ export class AIService {
     try {
       if (!responseText) throw new Error('La IA devolvió una respuesta vacía');
       parsedData = JSON.parse(responseText) as ExtractedStatementResponse;
-    } catch {
+    } catch (parseError: unknown) {
       if (!usage.isPremium) {
         await this.aiUsageService.refundUsage(
           userId,
@@ -200,7 +210,18 @@ export class AIService {
           usage.periodMonth,
         );
       }
-      this.logger.error(`Error parseando JSON de OpenAI: ${responseText}`);
+      const reason =
+        parseError instanceof Error ? parseError.message : String(parseError);
+      this.logger.error(
+        `Error parseando JSON de OpenAI (status=${responseStatus ?? 'n/a'}, incompleteReason=${incompleteReason ?? 'n/a'}): ${reason} | raw: ${responseText}`,
+      );
+
+      if (incompleteReason === 'max_output_tokens') {
+        throw new InternalServerErrorException(
+          'El estado de cuenta es demasiado extenso para procesarlo de una vez',
+        );
+      }
+
       throw new InternalServerErrorException(
         'Error procesando el resultado de la IA',
       );
