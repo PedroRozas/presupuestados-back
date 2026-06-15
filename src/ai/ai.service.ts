@@ -259,7 +259,7 @@ Si detectas una compra en cuotas, conserva esa información en el nombre del gas
   private buildStatementPrompt(targetDate: string, categoriesContext: string) {
     return `Analiza el archivo adjunto y extrae gastos.
 
-Fecha de respaldo: ${targetDate}. Usa la fecha de la fila si es clara; si no existe o es ambigua, usa la fecha de respaldo.
+Fecha del periodo: ${targetDate}. Todos los gastos se registran con esta fecha, sin importar la fecha de compra original de cada fila. En el campo date devuelve siempre ${targetDate}.
 
 Reglas de extracción:
 - Devuelve solo cargos reales de consumo. Ignora siempre pagos, pagos de tarjeta, pagos de cuenta, abonos, sueldos, transferencias recibidas, devoluciones, reversas, anulaciones, saldos anteriores, intereses informativos y totales/resúmenes.
@@ -332,21 +332,13 @@ ${categoriesContext}
         const category = categoryNamesById.get(categoryId) ?? 'Varios';
 
         return {
-          date: this.normalizeDate(expense.date, targetDate),
+          date: targetDate,
           description: expense.description.replace(/\s+/g, ' ').trim(),
           amount: Math.round(Number(expense.amount)),
           category,
           categoryId,
         };
       });
-  }
-
-  private normalizeDate(date: string, fallbackDate: string) {
-    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      return date;
-    }
-
-    return fallbackDate;
   }
 
   private isPaymentLikeDescription(description: string) {
