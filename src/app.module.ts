@@ -19,6 +19,7 @@ import { CategoriesModule } from './categories/categories.module.js';
 import { AIUsageModule } from './ai-usage/ai-usage.module.js';
 import { SecurityModule } from './security/security.module.js';
 import { ExportsModule } from './exports/exports.module.js';
+import { SimulationsModule } from './simulations/simulations.module.js';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { ExportsModule } from './exports/exports.module.js';
     FamilyMembersModule,
     CategoriesModule,
     ExportsModule,
+    SimulationsModule,
   ],
   controllers: [],
   providers: [],
