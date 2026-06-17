@@ -22,6 +22,13 @@
       "when": 1778036175765,
       "tag": "0002_narrow_leech",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1781717029933,
+      "tag": "0003_wakeful_famine",
+      "breakpoints": true
     }
   ]
 }
