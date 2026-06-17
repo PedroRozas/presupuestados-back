@@ -39,7 +39,7 @@ describe('MonthlyFinanceService.personalize', () => {
       { userId: 'A', amount: '100', description: 'Sueldo' },
     ]
     const db = createDbMock([[], globals], ops)
-    const service = new MonthlyFinanceService(db)
+    const service = new MonthlyFinanceService(db, { assertFamilyMemberIsLinked: async () => {} } as never)
 
     await service.personalize('couple-1', 'owner-1', 7, 2026, 'incomes')
 
@@ -55,7 +55,7 @@ describe('MonthlyFinanceService.personalize', () => {
   it('es idempotente: si ya hay overrides, no inserta', async () => {
     const ops: RecordedOp[] = []
     const db = createDbMock([[{ id: 'x', userId: 'A' }]], ops)
-    const service = new MonthlyFinanceService(db)
+    const service = new MonthlyFinanceService(db, { assertFamilyMemberIsLinked: async () => {} } as never)
 
     await service.personalize('couple-1', 'owner-1', 7, 2026, 'incomes')
 

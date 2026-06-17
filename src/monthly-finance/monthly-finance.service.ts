@@ -13,6 +13,7 @@ import {
 import { resolveEffectiveEntries } from './resolve-effective.js'
 import { CreateMonthlyEntryDto } from './dto/create-monthly-entry.dto.js'
 import { UpdateMonthlyEntryDto } from './dto/update-monthly-entry.dto.js'
+import { CoupleContextService } from '../common/services/couple-context.service.js'
 
 type Tx = Parameters<
   Parameters<NodePgDatabase<typeof schema>['transaction']>[0]
@@ -31,6 +32,7 @@ export interface EffectiveEntry {
 export class MonthlyFinanceService {
   constructor(
     @Inject(DRIZZLE) private readonly db: NodePgDatabase<typeof schema>,
+    private readonly coupleContextService: CoupleContextService,
   ) {}
 
   async getEffectiveIncomes(
@@ -251,6 +253,11 @@ export class MonthlyFinanceService {
     type: MonthlyType,
     dto: CreateMonthlyEntryDto,
   ) {
+    await this.coupleContextService.assertFamilyMemberIsLinked(
+      coupleId,
+      dto.user_id,
+      'No puedes asignar ingresos/deducciones a una pareja que todavía no está vinculada.',
+    )
     if (type === 'incomes') {
       const inserted = await this.db
         .insert(monthlyIncomes)

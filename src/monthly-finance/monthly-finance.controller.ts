@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -16,6 +17,8 @@ import { MonthlyFinanceService } from './monthly-finance.service.js'
 import type { MonthlyType } from './monthly-finance.service.js'
 import { CreateMonthlyEntryDto } from './dto/create-monthly-entry.dto.js'
 import { UpdateMonthlyEntryDto } from './dto/update-monthly-entry.dto.js'
+import { PersonalizeDto } from './dto/personalize.dto.js'
+import { ResetQueryDto } from './dto/reset-query.dto.js'
 
 @Controller('monthly-finance')
 @UseGuards(AuthGuard)
@@ -29,9 +32,16 @@ export class MonthlyFinanceController {
     return this.coupleContextService.getCoupleIdOrThrow(userId)
   }
 
+  private assertType(type: string): MonthlyType {
+    if (type !== 'incomes' && type !== 'deductions') {
+      throw new BadRequestException('type debe ser incomes o deductions')
+    }
+    return type
+  }
+
   @Post('personalize')
   async personalize(
-    @Body() body: { month: number; year: number; type?: MonthlyType | 'both' },
+    @Body() body: PersonalizeDto,
     @Req() req: Request & { user: AuthenticatedUser },
   ) {
     const ownerId = req.user.id
@@ -48,50 +58,51 @@ export class MonthlyFinanceController {
 
   @Delete('reset')
   async reset(
-    @Query('month') month: string,
-    @Query('year') year: string,
-    @Query('type') type: MonthlyType | 'both' | undefined,
+    @Query() query: ResetQueryDto,
     @Req() req: Request & { user: AuthenticatedUser },
   ) {
     const coupleId = await this.coupleId(req.user.id)
     await this.service.reset(
       coupleId,
-      parseInt(month, 10),
-      parseInt(year, 10),
-      type ?? 'both',
+      query.month,
+      query.year,
+      query.type ?? 'both',
     )
     return { reset: true }
   }
 
   @Post(':type')
   async create(
-    @Param('type') type: MonthlyType,
+    @Param('type') type: string,
     @Body() dto: CreateMonthlyEntryDto,
     @Req() req: Request & { user: AuthenticatedUser },
   ) {
+    const t = this.assertType(type)
     const ownerId = req.user.id
     const coupleId = await this.coupleId(ownerId)
-    return this.service.createEntry(coupleId, ownerId, type, dto)
+    return this.service.createEntry(coupleId, ownerId, t, dto)
   }
 
   @Put(':type/:id')
   async update(
-    @Param('type') type: MonthlyType,
+    @Param('type') type: string,
     @Param('id') id: string,
     @Body() dto: UpdateMonthlyEntryDto,
     @Req() req: Request & { user: AuthenticatedUser },
   ) {
+    const t = this.assertType(type)
     const coupleId = await this.coupleId(req.user.id)
-    return this.service.updateEntry(coupleId, type, id, dto)
+    return this.service.updateEntry(coupleId, t, id, dto)
   }
 
   @Delete(':type/:id')
   async remove(
-    @Param('type') type: MonthlyType,
+    @Param('type') type: string,
     @Param('id') id: string,
     @Req() req: Request & { user: AuthenticatedUser },
   ) {
+    const t = this.assertType(type)
     const coupleId = await this.coupleId(req.user.id)
-    return this.service.deleteEntry(coupleId, type, id)
+    return this.service.deleteEntry(coupleId, t, id)
   }
 }
