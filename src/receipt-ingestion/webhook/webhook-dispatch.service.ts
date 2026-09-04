@@ -1,17 +1,26 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { RedisService } from '../../security/redis.service.js';
 import { ReceiptConfigService } from '../receipt.config.js';
-import { RECEIPT_RATE_LIMIT_KEY_PREFIX } from '../receipt.constants.js';
+import {
+  RECEIPT_CLOSE_COMMAND,
+  RECEIPT_RATE_LIMIT_KEY_PREFIX,
+} from '../receipt.constants.js';
 import { AllowedSendersRepository } from '../repository/allowed-senders.repository.js';
 import { ReceiptQueueService } from '../queue/receipt-queue.service.js';
 import {
   extractIncomingMessages,
   type IncomingImageMessage,
+  type IncomingTextMessage,
   type IncomingWhatsAppMessage,
   type MetaWebhookPayload,
 } from '../schemas/meta-webhook.schema.js';
 import { maskPhone } from '../utils/mask-phone.js';
 import type { ReceiptAllowedSender } from '../../database/schema/index.js';
+
+const IMMEDIATE_DELAY_MS = 0;
+
+export const isCloseCommand = (body: string): boolean =>
+  body.trim().toLowerCase() === RECEIPT_CLOSE_COMMAND;
 
 @Injectable()
 export class WebhookDispatchService {
@@ -51,6 +60,10 @@ export class WebhookDispatchService {
 
     if (message.kind === 'image') {
       await this.enqueueImage(message, sender);
+      return;
+    }
+    if (isCloseCommand(message.body)) {
+      await this.enqueueCloseCommand(message, sender);
     }
   }
 
@@ -76,5 +89,19 @@ export class WebhookDispatchService {
       coupleId: sender.coupleId,
       receivedAtIso: message.receivedAt.toISOString(),
     });
+  }
+
+  private async enqueueCloseCommand(
+    message: IncomingTextMessage,
+    sender: ReceiptAllowedSender,
+  ): Promise<void> {
+    await this.queue.enqueueCloseGroup(
+      {
+        kind: 'command',
+        senderPhoneE164: message.senderPhoneE164,
+        coupleId: sender.coupleId,
+      },
+      IMMEDIATE_DELAY_MS,
+    );
   }
 }

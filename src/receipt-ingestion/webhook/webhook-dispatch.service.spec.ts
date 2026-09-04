@@ -1,4 +1,7 @@
-import { WebhookDispatchService } from './webhook-dispatch.service.js';
+import {
+  WebhookDispatchService,
+  isCloseCommand,
+} from './webhook-dispatch.service.js';
 import type { AllowedSendersRepository } from '../repository/allowed-senders.repository.js';
 import type { ReceiptQueueService } from '../queue/receipt-queue.service.js';
 import type { RedisService } from '../../security/redis.service.js';
@@ -57,6 +60,7 @@ describe('WebhookDispatchService', () => {
     } as unknown as AllowedSendersRepository;
     const queue = {
       enqueueIngestImage: jest.fn(() => Promise.resolve()),
+      enqueueCloseGroup: jest.fn(() => Promise.resolve()),
     };
     const redis = {
       incrementWithTtl: jest.fn(() =>
@@ -116,7 +120,7 @@ describe('WebhookDispatchService', () => {
     expect(queue.enqueueIngestImage).not.toHaveBeenCalled();
   });
 
-  it('ignora mensajes de texto en esta fase', async () => {
+  it('ignora texto que no es un comando', async () => {
     const { service, queue } = buildService({
       sender: { userId: 'u1', coupleId: 'c1' },
     });
@@ -134,5 +138,57 @@ describe('WebhookDispatchService', () => {
     );
 
     expect(queue.enqueueIngestImage).not.toHaveBeenCalled();
+    expect(queue.enqueueCloseGroup).not.toHaveBeenCalled();
+  });
+
+  it('encola el cierre por comando cuando el texto es "listo"', async () => {
+    const { service, queue } = buildService({
+      sender: { userId: 'u1', coupleId: 'c1' },
+    });
+
+    await service.dispatch(
+      buildPayload([
+        {
+          id: 'wamid.t',
+          from: PHONE,
+          timestamp: '1',
+          type: 'text',
+          text: { body: '  Listo ' },
+        },
+      ]),
+    );
+
+    expect(queue.enqueueCloseGroup).toHaveBeenCalledWith(
+      { kind: 'command', senderPhoneE164: `+${PHONE}`, coupleId: 'c1' },
+      0,
+    );
+    expect(queue.enqueueIngestImage).not.toHaveBeenCalled();
+  });
+
+  it('no encola nada para un texto distinto de "listo"', async () => {
+    const { service, queue } = buildService({
+      sender: { userId: 'u1', coupleId: 'c1' },
+    });
+
+    await service.dispatch(
+      buildPayload([
+        {
+          id: 'wamid.t',
+          from: PHONE,
+          timestamp: '1',
+          type: 'text',
+          text: { body: 'hola' },
+        },
+      ]),
+    );
+
+    expect(queue.enqueueCloseGroup).not.toHaveBeenCalled();
+  });
+});
+
+describe('isCloseCommand', () => {
+  it('reconoce el comando sin importar mayúsculas ni espacios', () => {
+    expect(isCloseCommand(' LISTO ')).toBe(true);
+    expect(isCloseCommand('listo!')).toBe(false);
   });
 });
