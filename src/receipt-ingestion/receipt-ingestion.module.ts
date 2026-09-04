@@ -10,12 +10,17 @@ import { ReceiptImagesRepository } from './repository/receipt-images.repository.
 import { ReceiptQueueService } from './queue/receipt-queue.service.js';
 import { ReceiptWorkerService } from './queue/receipt-worker.service.js';
 import { IngestImageProcessor } from './queue/processors/ingest-image.processor.js';
+import { CloseGroupProcessor } from './queue/processors/close-group.processor.js';
+import { NotifyUserProcessor } from './queue/processors/notify-user.processor.js';
 import { ImageProcessorService } from './media/image-processor.service.js';
 import { ReceiptStorageService } from './storage/receipt-storage.service.js';
 import { ReceiptGroupService } from './groups/receipt-group.service.js';
 import { WHATSAPP_MEDIA_CLIENT } from './whatsapp/whatsapp-media.client.js';
 import { MetaWhatsAppMediaClient } from './whatsapp/meta-whatsapp-media.client.js';
 import { LocalWhatsAppMediaClient } from './whatsapp/local-whatsapp-media.client.js';
+import { WHATSAPP_MESSAGING_CLIENT } from './whatsapp/whatsapp-messaging.client.js';
+import { MetaWhatsAppMessagingClient } from './whatsapp/meta-whatsapp-messaging.client.js';
+import { LocalWhatsAppMessagingClient } from './whatsapp/local-whatsapp-messaging.client.js';
 
 @Module({
   imports: [SecurityModule],
@@ -30,6 +35,8 @@ import { LocalWhatsAppMediaClient } from './whatsapp/local-whatsapp-media.client
     ReceiptQueueService,
     ReceiptWorkerService,
     IngestImageProcessor,
+    CloseGroupProcessor,
+    NotifyUserProcessor,
     ImageProcessorService,
     ReceiptStorageService,
     ReceiptGroupService,
@@ -40,6 +47,14 @@ import { LocalWhatsAppMediaClient } from './whatsapp/local-whatsapp-media.client
         config.mediaSource === 'local'
           ? new LocalWhatsAppMediaClient(config)
           : new MetaWhatsAppMediaClient(config),
+    },
+    {
+      provide: WHATSAPP_MESSAGING_CLIENT,
+      inject: [ReceiptConfigService],
+      useFactory: (config: ReceiptConfigService) =>
+        config.messagingSource === 'local'
+          ? new LocalWhatsAppMessagingClient()
+          : new MetaWhatsAppMessagingClient(config),
     },
   ],
 })

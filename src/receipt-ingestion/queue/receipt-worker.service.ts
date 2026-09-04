@@ -9,8 +9,14 @@ import type IORedis from 'ioredis';
 import { ReceiptConfigService } from '../receipt.config.js';
 import { RECEIPT_JOB, RECEIPT_QUEUE_NAME } from '../receipt.constants.js';
 import { createReceiptRedisConnection } from './receipt-queue.service.js';
-import type { IngestImageJobPayload } from './receipt-queue.constants.js';
+import type {
+  CloseGroupJobPayload,
+  IngestImageJobPayload,
+  NotifyUserJobPayload,
+} from './receipt-queue.constants.js';
 import { IngestImageProcessor } from './processors/ingest-image.processor.js';
+import { CloseGroupProcessor } from './processors/close-group.processor.js';
+import { NotifyUserProcessor } from './processors/notify-user.processor.js';
 
 export class UnknownReceiptJobError extends Error {
   constructor(name: string) {
@@ -28,6 +34,8 @@ export class ReceiptWorkerService implements OnModuleInit, OnModuleDestroy {
   constructor(
     private readonly config: ReceiptConfigService,
     private readonly ingestImage: IngestImageProcessor,
+    private readonly closeGroup: CloseGroupProcessor,
+    private readonly notifyUser: NotifyUserProcessor,
   ) {}
 
   onModuleInit(): void {
@@ -61,9 +69,15 @@ export class ReceiptWorkerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async handle(job: Job): Promise<unknown> {
-    if (job.name === RECEIPT_JOB.INGEST_IMAGE) {
-      return this.ingestImage.process(job.data as IngestImageJobPayload);
+    switch (job.name) {
+      case RECEIPT_JOB.INGEST_IMAGE:
+        return this.ingestImage.process(job.data as IngestImageJobPayload);
+      case RECEIPT_JOB.CLOSE_GROUP:
+        return this.closeGroup.process(job.data as CloseGroupJobPayload);
+      case RECEIPT_JOB.NOTIFY_USER:
+        return this.notifyUser.process(job.data as NotifyUserJobPayload);
+      default:
+        throw new UnknownReceiptJobError(job.name);
     }
-    throw new UnknownReceiptJobError(job.name);
   }
 }
