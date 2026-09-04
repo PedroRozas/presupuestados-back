@@ -51,7 +51,14 @@ async function bootstrap() {
     res.type('text/plain').send('User-agent: *\nDisallow: /\n');
   });
 
-  app.use(json({ limit: bodyLimit }));
+  app.use(
+    json({
+      limit: bodyLimit,
+      verify: (req, _res, buf) => {
+        req.rawBody = Buffer.from(buf);
+      },
+    }),
+  );
   app.use(urlencoded({ extended: false, limit: '100kb' }));
   app.use(cookieParser());
 
