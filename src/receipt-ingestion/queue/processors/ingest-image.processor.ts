@@ -4,6 +4,7 @@ import {
   ImageProcessorService,
   type ProcessedImage,
 } from '../../media/image-processor.service.js';
+import { ReceiptConfigService } from '../../receipt.config.js';
 import { ReceiptGroupsRepository } from '../../repository/receipt-groups.repository.js';
 import { ReceiptImagesRepository } from '../../repository/receipt-images.repository.js';
 import { ReceiptStorageService } from '../../storage/receipt-storage.service.js';
@@ -13,11 +14,14 @@ import {
   WHATSAPP_MEDIA_CLIENT,
   type WhatsAppMediaClient,
 } from '../../whatsapp/whatsapp-media.client.js';
+import { ReceiptQueueService } from '../receipt-queue.service.js';
 import type { IngestImageJobPayload } from '../receipt-queue.constants.js';
 import type {
   ReceiptGroup,
   ReceiptImage,
 } from '../../../database/schema/index.js';
+
+const MILLISECONDS_PER_SECOND = 1000;
 
 export type IngestImageResult =
   | { outcome: 'stored'; imageId: string; groupId: string }
@@ -36,6 +40,8 @@ export class IngestImageProcessor {
     private readonly groupService: ReceiptGroupService,
     private readonly groupsRepo: ReceiptGroupsRepository,
     private readonly imagesRepo: ReceiptImagesRepository,
+    private readonly queue: ReceiptQueueService,
+    private readonly config: ReceiptConfigService,
   ) {}
 
   async process(payload: IngestImageJobPayload): Promise<IngestImageResult> {
@@ -63,6 +69,11 @@ export class IngestImageProcessor {
       receivedAt,
     });
     const image = await this.storeImage(payload, group, processed, receivedAt);
+
+    await this.queue.enqueueCloseGroup(
+      { kind: 'window', groupId: group.id, pageIndex: image.pageIndex },
+      this.config.groupWindowSeconds * MILLISECONDS_PER_SECOND,
+    );
 
     return { outcome: 'stored', imageId: image.id, groupId: group.id };
   }

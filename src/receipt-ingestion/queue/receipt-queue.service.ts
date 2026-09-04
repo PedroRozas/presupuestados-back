@@ -3,11 +3,17 @@ import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
 import { ReceiptConfigService } from '../receipt.config.js';
 import {
+  RECEIPT_CLOSE_COMMAND_JOB_SUFFIX,
+  RECEIPT_CLOSE_JOB_ID_PREFIX,
   RECEIPT_FAILED_JOB_RETENTION_SECONDS,
   RECEIPT_JOB,
   RECEIPT_QUEUE_NAME,
 } from '../receipt.constants.js';
-import type { IngestImageJobPayload } from './receipt-queue.constants.js';
+import type {
+  CloseGroupJobPayload,
+  IngestImageJobPayload,
+  NotifyUserJobPayload,
+} from './receipt-queue.constants.js';
 
 export const createReceiptRedisConnection = (redisUrl: string): IORedis =>
   new IORedis(redisUrl, {
@@ -21,6 +27,13 @@ export class ReceiptQueueUnavailableError extends Error {
     this.name = 'ReceiptQueueUnavailableError';
   }
 }
+
+const stripPlus = (phoneE164: string): string => phoneE164.replace(/^\+/, '');
+
+export const buildCloseGroupJobId = (payload: CloseGroupJobPayload): string =>
+  payload.kind === 'window'
+    ? `${RECEIPT_CLOSE_JOB_ID_PREFIX}-${payload.groupId}-${payload.pageIndex}`
+    : `${RECEIPT_CLOSE_JOB_ID_PREFIX}-${payload.coupleId}-${stripPlus(payload.senderPhoneE164)}-${RECEIPT_CLOSE_COMMAND_JOB_SUFFIX}`;
 
 @Injectable()
 export class ReceiptQueueService implements OnModuleDestroy {
@@ -37,6 +50,24 @@ export class ReceiptQueueService implements OnModuleDestroy {
   async enqueueIngestImage(payload: IngestImageJobPayload): Promise<void> {
     await this.getQueue().add(RECEIPT_JOB.INGEST_IMAGE, payload);
     this.logger.log(`job_enqueued name=${RECEIPT_JOB.INGEST_IMAGE}`);
+  }
+
+  async enqueueCloseGroup(
+    payload: CloseGroupJobPayload,
+    delayMs: number,
+  ): Promise<void> {
+    await this.getQueue().add(RECEIPT_JOB.CLOSE_GROUP, payload, {
+      jobId: buildCloseGroupJobId(payload),
+      delay: delayMs,
+    });
+    this.logger.log(
+      `job_enqueued name=${RECEIPT_JOB.CLOSE_GROUP} kind=${payload.kind} delayMs=${delayMs}`,
+    );
+  }
+
+  async enqueueNotifyUser(payload: NotifyUserJobPayload): Promise<void> {
+    await this.getQueue().add(RECEIPT_JOB.NOTIFY_USER, payload);
+    this.logger.log(`job_enqueued name=${RECEIPT_JOB.NOTIFY_USER}`);
   }
 
   async onModuleDestroy(): Promise<void> {

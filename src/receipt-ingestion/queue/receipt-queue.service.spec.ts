@@ -1,6 +1,7 @@
 import {
   ReceiptQueueService,
   ReceiptQueueUnavailableError,
+  buildCloseGroupJobId,
 } from './receipt-queue.service.js';
 import type { ReceiptConfigService } from '../receipt.config.js';
 import type { IngestImageJobPayload } from './receipt-queue.constants.js';
@@ -33,5 +34,23 @@ describe('ReceiptQueueService', () => {
     await expect(service.enqueueIngestImage(buildPayload())).rejects.toThrow(
       ReceiptQueueUnavailableError,
     );
+  });
+});
+
+describe('buildCloseGroupJobId', () => {
+  it('usa grupo y página para cierres por ventana', () => {
+    expect(
+      buildCloseGroupJobId({ kind: 'window', groupId: 'g1', pageIndex: 3 }),
+    ).toBe('close-g1-3');
+  });
+
+  it('usa pareja y número sin signo más para cierres por comando', () => {
+    expect(
+      buildCloseGroupJobId({
+        kind: 'command',
+        senderPhoneE164: '+56912345678',
+        coupleId: 'c1',
+      }),
+    ).toBe('close-c1-56912345678-command');
   });
 });
