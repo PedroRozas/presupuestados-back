@@ -9,12 +9,23 @@ import type {
   ReceiptGroup,
 } from '../../database/schema/index.js';
 import { RECEIPT_REVIEW_REASON_EXTRACTION_PENDING } from '../receipt.constants.js';
+import type { ReceiptSourceKind } from '../receipt.constants.js';
 
 export class ReceiptGroupInsertError extends Error {
   constructor() {
     super('receipt_group_insert_returned_no_row');
     this.name = 'ReceiptGroupInsertError';
   }
+}
+
+export interface ExtractionHeader {
+  status: 'ready' | 'needs_review';
+  reviewReasons: string[];
+  merchantRaw: string | null;
+  receiptDate: string | null;
+  totalDeclared: string | null;
+  currency: string;
+  sourceKind: ReceiptSourceKind;
 }
 
 @Injectable()
@@ -84,5 +95,44 @@ export class ReceiptGroupsRepository {
       )
       .returning({ id: receiptGroups.id });
     return rows.length > 0;
+  }
+
+  async markExtracting(groupId: string, closedAt: Date): Promise<boolean> {
+    const rows = await this.db
+      .update(receiptGroups)
+      .set({ status: 'extracting', closedAt })
+      .where(
+        and(
+          eq(receiptGroups.id, groupId),
+          eq(receiptGroups.status, 'collecting'),
+        ),
+      )
+      .returning({ id: receiptGroups.id });
+    return rows.length > 0;
+  }
+
+  async applyExtraction(
+    groupId: string,
+    header: ExtractionHeader,
+  ): Promise<void> {
+    await this.db
+      .update(receiptGroups)
+      .set({
+        status: header.status,
+        reviewReasons: header.reviewReasons,
+        merchantRaw: header.merchantRaw,
+        receiptDate: header.receiptDate,
+        totalDeclared: header.totalDeclared,
+        currency: header.currency,
+        sourceKind: header.sourceKind,
+      })
+      .where(eq(receiptGroups.id, groupId));
+  }
+
+  async markFailed(groupId: string, reviewReasons: string[]): Promise<void> {
+    await this.db
+      .update(receiptGroups)
+      .set({ status: 'failed', reviewReasons })
+      .where(eq(receiptGroups.id, groupId));
   }
 }

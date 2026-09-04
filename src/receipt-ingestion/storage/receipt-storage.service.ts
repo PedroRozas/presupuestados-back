@@ -4,7 +4,7 @@ import { ReceiptConfigService } from '../receipt.config.js';
 import { RECEIPT_IMAGE_CONTENT_TYPE } from '../receipt.constants.js';
 
 export class ReceiptStorageError extends Error {
-  constructor(operation: 'upload' | 'sign', detail: string) {
+  constructor(operation: 'upload' | 'sign' | 'download', detail: string) {
     super(`receipt_storage_${operation}_failed: ${detail}`);
     this.name = 'ReceiptStorageError';
   }
@@ -45,5 +45,17 @@ export class ReceiptStorageService {
       throw new ReceiptStorageError('sign', error?.message ?? 'sin datos');
     }
     return data.signedUrl;
+  }
+
+  async download(path: string): Promise<Buffer> {
+    const { data, error } = await this.supabase
+      .getClient()
+      .storage.from(this.bucket)
+      .download(path);
+
+    if (error || !data) {
+      throw new ReceiptStorageError('download', error?.message ?? 'sin datos');
+    }
+    return Buffer.from(await data.arrayBuffer());
   }
 }

@@ -110,3 +110,5 @@ export const RECEIPT_EXTRACTION_STATUS = {
 } as const;
 
 export const RECEIPT_PROMPT_VERSION_V1 = 'v1';
+
+export const RECEIPT_PERIOD_TIME_ZONE = 'America/Santiago';

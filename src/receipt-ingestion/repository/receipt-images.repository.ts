@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, max } from 'drizzle-orm';
+import { and, asc, eq, max } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { DRIZZLE } from '../../database/database.module.js';
 import * as schema from '../../database/schema/index.js';
@@ -59,5 +59,13 @@ export class ReceiptImagesRepository {
     const created = rows[0];
     if (!created) throw new ReceiptImageInsertError();
     return created;
+  }
+
+  async listByGroup(groupId: string): Promise<ReceiptImage[]> {
+    return this.db
+      .select()
+      .from(receiptImages)
+      .where(eq(receiptImages.groupId, groupId))
+      .orderBy(asc(receiptImages.pageIndex));
   }
 }
