@@ -73,7 +73,7 @@ export class IngestImageProcessor {
     processed: ProcessedImage,
     receivedAt: Date,
   ): Promise<ReceiptImage> {
-    const pageIndex = (await this.imagesRepo.countByGroup(group.id)) + 1;
+    const pageIndex = await this.imagesRepo.nextPageIndex(group.id);
     const storagePath = buildStoragePath({
       coupleId: payload.coupleId,
       groupId: group.id,

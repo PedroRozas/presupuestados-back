@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, count, eq } from 'drizzle-orm';
+import { and, eq, max } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { DRIZZLE } from '../../database/database.module.js';
 import * as schema from '../../database/schema/index.js';
@@ -45,12 +45,13 @@ export class ReceiptImagesRepository {
     return rows.length > 0;
   }
 
-  async countByGroup(groupId: string): Promise<number> {
+  async nextPageIndex(groupId: string): Promise<number> {
     const rows = await this.db
-      .select({ total: count() })
+      .select({ maxPage: max(receiptImages.pageIndex) })
       .from(receiptImages)
       .where(eq(receiptImages.groupId, groupId));
-    return Number(rows[0]?.total ?? 0);
+    const maxPage = rows[0]?.maxPage;
+    return (maxPage ?? 0) + 1;
   }
 
   async create(values: NewReceiptImage): Promise<ReceiptImage> {

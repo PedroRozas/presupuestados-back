@@ -20,7 +20,7 @@ const payload: IngestImageJobPayload = {
 const buildProcessor = (overrides: {
   existsByMessageId?: boolean;
   existsBySha256?: boolean;
-  countByGroup?: number;
+  nextPageIndex?: number;
 }) => {
   const media = {
     download: jest.fn(() =>
@@ -57,7 +57,7 @@ const buildProcessor = (overrides: {
     existsBySha256: jest.fn(() =>
       Promise.resolve(overrides.existsBySha256 ?? false),
     ),
-    countByGroup: jest.fn(() => Promise.resolve(overrides.countByGroup ?? 0)),
+    nextPageIndex: jest.fn(() => Promise.resolve(overrides.nextPageIndex ?? 1)),
     create: jest.fn((values: { storagePath: string }) =>
       Promise.resolve({ id: 'image-1', ...values }),
     ),
@@ -86,7 +86,7 @@ const buildProcessor = (overrides: {
 describe('IngestImageProcessor', () => {
   it('descarga, convierte, sube y persiste la imagen en el grupo resuelto', async () => {
     const { processor, storage, imagesRepo, groupsRepo } = buildProcessor({
-      countByGroup: 1,
+      nextPageIndex: 2,
     });
 
     const result = await processor.process(payload);
