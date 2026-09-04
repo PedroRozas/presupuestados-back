@@ -28,12 +28,12 @@ Deshabilitar sin borrar: `update receipt_allowed_senders set enabled = false whe
 ## 3. App de Meta y WhatsApp Cloud API
 
 1. En https://developers.facebook.com crear una app tipo **Business** y agregar el producto **WhatsApp**.
-2. En *WhatsApp → API Setup*: anotar `Phone number ID` (env `RECEIPT_WA_PHONE_NUMBER_ID`). Para desarrollo sirve el número de prueba; para producción hay que agregar y verificar un número propio.
-3. En *App settings → Basic*: copiar `App secret` (env `RECEIPT_WA_APP_SECRET`).
+2. En _WhatsApp → API Setup_: anotar `Phone number ID` (env `RECEIPT_WA_PHONE_NUMBER_ID`). Para desarrollo sirve el número de prueba; para producción hay que agregar y verificar un número propio.
+3. En _App settings → Basic_: copiar `App secret` (env `RECEIPT_WA_APP_SECRET`).
 4. Crear un **System user** en Meta Business Suite con rol admin sobre la app, y generar un token permanente con permisos `whatsapp_business_messaging` y `whatsapp_business_management` (env `RECEIPT_WA_ACCESS_TOKEN`). El token temporal del panel expira en 24 h.
 5. Definir un `RECEIPT_WA_VERIFY_TOKEN` largo y aleatorio (`openssl rand -hex 32`).
-6. En *WhatsApp → Configuration → Webhook*: URL `https://<dominio-backend>/receipts/webhook`, verify token igual al env. Meta hace un `GET` y espera el `hub.challenge`. Suscribirse al campo `messages`.
-7. Con número de prueba, agregar los números destinatarios como *testers* en la misma pantalla de API Setup; Meta solo entrega mensajes de números registrados.
+6. En _WhatsApp → Configuration → Webhook_: URL `https://<dominio-backend>/receipts/webhook`, verify token igual al env. Meta hace un `GET` y espera el `hub.challenge`. Suscribirse al campo `messages`.
+7. Con número de prueba, agregar los números destinatarios como _testers_ en la misma pantalla de API Setup; Meta solo entrega mensajes de números registrados.
 
 ## 4. Variables de entorno
 
@@ -43,7 +43,13 @@ Ver bloque `RECEIPT_*` en `.env.example`. `REDIS_URL` es obligatorio: sin Redis 
 
 1. `RECEIPT_MEDIA_SOURCE=local` y `RECEIPT_LOCAL_MEDIA_DIR=./tmp/receipt-media` en `.env`.
 2. Copiar una foto de boleta a `tmp/receipt-media/boleta-1.jpg`.
-3. Insertar en `receipt_allowed_senders` el número simulado, por defecto `+56900000000`.
+3. Insertar en `receipt_allowed_senders` el número simulado, por defecto `+56900000000` (configurable con `RECEIPT_SIMULATE_PHONE`).
 4. `npm run start:dev`.
-5. `npm run receipts:simulate -- boleta-1.jpg`.
+5. `npm run receipts:simulate -- boleta-1.jpg` (usa `RECEIPT_SIMULATE_PHONE` y `RECEIPT_SIMULATE_BASE_URL`, este último por defecto `http://localhost:3000`).
 6. Verificar en logs `job_enqueued`, luego `image_stored`, y en Supabase: fila en `receipt_images`, objeto `.webp` en el bucket.
+
+En fase 1 los grupos quedan siempre en estado `collecting`: no hay cierre automático todavía (fase 2 lo agrega). `RECEIPT_WORKER_CONCURRENCY` debe mantenerse en `1` hasta fase 2, porque con concurrencia mayor a 1 pueden crearse grupos duplicados para el mismo remitente (ver comentario en `.env.example`).
+
+## 6. Migraciones
+
+La migración `drizzle/0004_daffy_triton.sql` (tablas `receipt_*`) se aplicó con `psql --single-transaction -f drizzle/0004_daffy_triton.sql` porque `drizzle.__drizzle_migrations` está vacía en esta base de datos. **Nunca correr `npm run db:migrate` contra esta base**: reproduciría las migraciones 0000-0004 desde cero y fallaría al chocar con objetos ya existentes. Las migraciones futuras deben aplicarse de la misma forma (`psql --single-transaction -f <archivo>`) hasta que `drizzle.__drizzle_migrations` refleje el historial real.

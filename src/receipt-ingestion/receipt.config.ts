@@ -118,8 +118,8 @@ export class ReceiptConfigService {
     );
   }
 
-  get redisUrl(): string {
-    return this.configService.getOrThrow<string>('REDIS_URL');
+  get redisUrl(): string | undefined {
+    return this.configService.get<string>('REDIS_URL') || undefined;
   }
 
   private getString(key: string, fallback: string): string {

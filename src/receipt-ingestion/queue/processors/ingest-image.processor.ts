@@ -1,6 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ReceiptGroupService } from '../../groups/receipt-group.service.js';
-import { ImageProcessorService } from '../../media/image-processor.service.js';
+import {
+  ImageProcessorService,
+  type ProcessedImage,
+} from '../../media/image-processor.service.js';
 import { ReceiptGroupsRepository } from '../../repository/receipt-groups.repository.js';
 import { ReceiptImagesRepository } from '../../repository/receipt-images.repository.js';
 import { ReceiptStorageService } from '../../storage/receipt-storage.service.js';
@@ -11,6 +14,10 @@ import {
   type WhatsAppMediaClient,
 } from '../../whatsapp/whatsapp-media.client.js';
 import type { IngestImageJobPayload } from '../receipt-queue.constants.js';
+import type {
+  ReceiptGroup,
+  ReceiptImage,
+} from '../../../database/schema/index.js';
 
 export type IngestImageResult =
   | { outcome: 'stored'; imageId: string; groupId: string }
@@ -55,6 +62,17 @@ export class IngestImageProcessor {
       userId: payload.senderUserId,
       receivedAt,
     });
+    const image = await this.storeImage(payload, group, processed, receivedAt);
+
+    return { outcome: 'stored', imageId: image.id, groupId: group.id };
+  }
+
+  private async storeImage(
+    payload: IngestImageJobPayload,
+    group: ReceiptGroup,
+    processed: ProcessedImage,
+    receivedAt: Date,
+  ): Promise<ReceiptImage> {
     const pageIndex = (await this.imagesRepo.countByGroup(group.id)) + 1;
     const storagePath = buildStoragePath({
       coupleId: payload.coupleId,
@@ -85,6 +103,6 @@ export class IngestImageProcessor {
     this.logger.log(
       `image_stored group=${group.id} page=${pageIndex} bytes=${processed.bytes}`,
     );
-    return { outcome: 'stored', imageId: image.id, groupId: group.id };
+    return image;
   }
 }

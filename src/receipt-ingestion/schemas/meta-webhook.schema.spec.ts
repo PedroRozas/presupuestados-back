@@ -111,4 +111,45 @@ describe('metaWebhookSchema', () => {
       metaWebhookSchema.safeParse({ object: 'page', entry: [] }).success,
     ).toBe(false);
   });
+
+  it('rechaza un mensaje type=image sin el objeto image', () => {
+    const payload = buildPayload([
+      {
+        id: 'wamid.img',
+        from: '56912345678',
+        timestamp: '1725300000',
+        type: 'image',
+      },
+    ]);
+
+    expect(metaWebhookSchema.safeParse(payload).success).toBe(false);
+  });
+
+  it('rechaza un mensaje de imagen sin image.id', () => {
+    const payload = buildPayload([
+      {
+        id: 'wamid.img',
+        from: '56912345678',
+        timestamp: '1725300000',
+        type: 'image',
+        image: { mime_type: 'image/jpeg' },
+      },
+    ]);
+
+    expect(metaWebhookSchema.safeParse(payload).success).toBe(false);
+  });
+
+  it('rechaza un mensaje con timestamp no numérico', () => {
+    const payload = buildPayload([
+      {
+        id: 'wamid.txt',
+        from: '56912345678',
+        timestamp: 'abc',
+        type: 'text',
+        text: { body: 'hola' },
+      },
+    ]);
+
+    expect(metaWebhookSchema.safeParse(payload).success).toBe(false);
+  });
 });

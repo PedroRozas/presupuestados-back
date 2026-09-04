@@ -55,7 +55,7 @@ async function bootstrap() {
     json({
       limit: bodyLimit,
       verify: (req, _res, buf) => {
-        req.rawBody = Buffer.from(buf);
+        req.rawBody = buf;
       },
     }),
   );

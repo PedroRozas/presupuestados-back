@@ -27,7 +27,7 @@ export class ReceiptStorageService {
       .storage.from(this.bucket)
       .upload(path, buffer, {
         contentType: RECEIPT_IMAGE_CONTENT_TYPE,
-        upsert: false,
+        upsert: true,
       });
 
     if (error) {

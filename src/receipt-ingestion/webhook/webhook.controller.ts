@@ -3,12 +3,14 @@ import {
   Controller,
   ForbiddenException,
   Get,
+  Header,
   HttpCode,
   Logger,
   Post,
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { timingSafeEqual } from 'node:crypto';
 import { ReceiptConfigService } from '../receipt.config.js';
 import { metaWebhookSchema } from '../schemas/meta-webhook.schema.js';
 import { WebhookDispatchService } from './webhook-dispatch.service.js';
@@ -26,6 +28,7 @@ export class WebhookController {
   ) {}
 
   @Get()
+  @Header('Content-Type', 'text/plain')
   verify(
     @Query('hub.mode') mode: string | undefined,
     @Query('hub.verify_token') token: string | undefined,
@@ -33,12 +36,22 @@ export class WebhookController {
   ): string {
     if (
       mode !== HUB_MODE_SUBSCRIBE ||
-      token !== this.config.whatsappVerifyToken ||
-      !challenge
+      !challenge ||
+      !this.isVerifyTokenValid(token)
     ) {
       throw new ForbiddenException();
     }
     return challenge;
+  }
+
+  private isVerifyTokenValid(token: string | undefined): boolean {
+    if (token === undefined) return false;
+
+    const expected = Buffer.from(this.config.whatsappVerifyToken);
+    const received = Buffer.from(token);
+    if (expected.length !== received.length) return false;
+
+    return timingSafeEqual(expected, received);
   }
 
   @Post()

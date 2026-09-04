@@ -2,10 +2,12 @@ import { z } from 'zod';
 
 const MILLISECONDS_PER_SECOND = 1000;
 
+const timestampSchema = z.string().regex(/^\d+$/);
+
 const imageMessageSchema = z.object({
   id: z.string(),
   from: z.string(),
-  timestamp: z.string(),
+  timestamp: timestampSchema,
   type: z.literal('image'),
   image: z.object({
     id: z.string(),
@@ -17,7 +19,7 @@ const imageMessageSchema = z.object({
 const textMessageSchema = z.object({
   id: z.string(),
   from: z.string(),
-  timestamp: z.string(),
+  timestamp: timestampSchema,
   type: z.literal('text'),
   text: z.object({ body: z.string() }),
 });
@@ -26,8 +28,8 @@ const otherMessageSchema = z
   .object({
     id: z.string(),
     from: z.string(),
-    timestamp: z.string(),
-    type: z.string(),
+    timestamp: timestampSchema,
+    type: z.string().refine((type) => type !== 'image' && type !== 'text'),
   })
   .passthrough();
 

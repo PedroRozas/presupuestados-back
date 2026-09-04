@@ -36,7 +36,13 @@ export class ReceiptWorkerService implements OnModuleInit, OnModuleDestroy {
       return;
     }
 
-    this.connection = createReceiptRedisConnection(this.config.redisUrl);
+    const redisUrl = this.config.redisUrl;
+    if (!redisUrl) {
+      this.logger.warn('receipt_worker_disabled REDIS_URL no configurado');
+      return;
+    }
+
+    this.connection = createReceiptRedisConnection(redisUrl);
     this.worker = new Worker(RECEIPT_QUEUE_NAME, (job) => this.handle(job), {
       connection: this.connection,
       concurrency: this.config.workerConcurrency,
