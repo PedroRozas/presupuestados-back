@@ -3,30 +3,65 @@ import { createHmac } from 'node:crypto';
 const DEFAULT_BASE_URL = 'http://localhost:3000';
 const DEFAULT_PHONE = '56900000000';
 const SECONDS_PER_MILLISECOND = 1 / 1000;
+const USAGE =
+  'Uso: npm run receipts:simulate -- <archivo> [telefono]  |  npm run receipts:simulate -- --text "<texto>" [telefono]';
+
+type SimulatorMessage =
+  | { kind: 'image'; fileName: string }
+  | { kind: 'text'; body: string };
 
 interface SimulatorArgs {
-  fileName: string;
+  message: SimulatorMessage;
   phone: string;
   baseUrl: string;
   secret: string;
 }
 
-const readArgs = (): SimulatorArgs => {
-  const [fileName, phoneArg] = process.argv.slice(2);
-  const secret = process.env['RECEIPT_WA_APP_SECRET'];
-  if (!fileName) {
-    throw new Error(
-      'Uso: npm run receipts:simulate -- <archivo-en-RECEIPT_LOCAL_MEDIA_DIR> [telefono-sin-mas]',
-    );
+const readMessage = (): { message: SimulatorMessage; phoneArg?: string } => {
+  const [first, second, third] = process.argv.slice(2);
+  if (first === '--text') {
+    if (!second) {
+      throw new Error(USAGE);
+    }
+    return { message: { kind: 'text', body: second }, phoneArg: third };
   }
+  if (!first) {
+    throw new Error(USAGE);
+  }
+  return { message: { kind: 'image', fileName: first }, phoneArg: second };
+};
+
+const readArgs = (): SimulatorArgs => {
+  const { message, phoneArg } = readMessage();
+  const secret = process.env['RECEIPT_WA_APP_SECRET'];
   if (!secret) {
     throw new Error('RECEIPT_WA_APP_SECRET no está definido en el entorno');
   }
   return {
-    fileName,
+    message,
     phone: phoneArg ?? process.env['RECEIPT_SIMULATE_PHONE'] ?? DEFAULT_PHONE,
     baseUrl: process.env['RECEIPT_SIMULATE_BASE_URL'] ?? DEFAULT_BASE_URL,
     secret,
+  };
+};
+
+const buildMessage = (args: SimulatorArgs) => {
+  const timestamp = String(Math.floor(Date.now() * SECONDS_PER_MILLISECOND));
+  if (args.message.kind === 'image') {
+    return {
+      id: `wamid.sim.img.${Date.now()}`,
+      from: args.phone,
+      timestamp,
+      type: 'image',
+      image: { id: args.message.fileName, mime_type: 'image/jpeg' },
+    };
+  }
+  return {
+    id: `wamid.sim.txt.${Date.now()}`,
+    from: args.phone,
+    timestamp,
+    type: 'text',
+    text: { body: args.message.body },
   };
 };
 
@@ -44,17 +79,7 @@ const buildPayload = (args: SimulatorArgs) => ({
               display_phone_number: '56900000001',
               phone_number_id: 'simulated',
             },
-            messages: [
-              {
-                id: `wamid.sim.${Date.now()}`,
-                from: args.phone,
-                timestamp: String(
-                  Math.floor(Date.now() * SECONDS_PER_MILLISECOND),
-                ),
-                type: 'image',
-                image: { id: args.fileName, mime_type: 'image/jpeg' },
-              },
-            ],
+            messages: [buildMessage(args)],
           },
         },
       ],

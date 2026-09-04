@@ -39,6 +39,8 @@ Deshabilitar sin borrar: `update receipt_allowed_senders set enabled = false whe
 
 Ver bloque `RECEIPT_*` en `.env.example`. `REDIS_URL` es obligatorio: sin Redis no hay cola.
 
+`RECEIPT_MESSAGING_SOURCE` elige cómo se envían los avisos al remitente: `meta` (por defecto) usa la API de WhatsApp Cloud; `local` los imprime en los logs del servidor como `whatsapp_text_local`, útil para pruebas sin credenciales de Meta.
+
 ## 5. Prueba local sin Meta
 
 1. `RECEIPT_MEDIA_SOURCE=local` y `RECEIPT_LOCAL_MEDIA_DIR=./tmp/receipt-media` en `.env`.
@@ -47,8 +49,11 @@ Ver bloque `RECEIPT_*` en `.env.example`. `REDIS_URL` es obligatorio: sin Redis 
 4. `npm run start:dev`.
 5. `npm run receipts:simulate -- boleta-1.jpg` (usa `RECEIPT_SIMULATE_PHONE` y `RECEIPT_SIMULATE_BASE_URL`, este último por defecto `http://localhost:3000`).
 6. Verificar en logs `job_enqueued`, luego `image_stored`, y en Supabase: fila en `receipt_images`, objeto `.webp` en el bucket.
+7. `npm run receipts:simulate -- --text "listo"` cierra el grupo abierto de inmediato. Verificar en logs `group_closed` y `whatsapp_text_local`, y en la base `status = 'needs_review'`, `review_reasons = '{extraction_pending}'`, `closed_at` no nulo.
 
-En fase 1 los grupos quedan siempre en estado `collecting`: no hay cierre automático todavía (fase 2 lo agrega). `RECEIPT_WORKER_CONCURRENCY` debe mantenerse en `1` hasta fase 2, porque con concurrencia mayor a 1 pueden crearse grupos duplicados para el mismo remitente (ver comentario en `.env.example`).
+En fase 2 los grupos se cierran solos 90 s después de la última foto (`RECEIPT_GROUP_WINDOW_SECONDS`) o de inmediato al enviar el texto `listo`. Al cerrar quedan en `needs_review` con motivo `extraction_pending` y el remitente recibe un aviso. Con `RECEIPT_MESSAGING_SOURCE=local` el aviso se imprime en los logs del servidor en vez de enviarse a WhatsApp.
+
+`RECEIPT_WORKER_CONCURRENCY` debe mantenerse en `1`, porque con concurrencia mayor a 1 pueden crearse grupos duplicados para el mismo remitente (ver comentario en `.env.example`).
 
 ## 6. Migraciones
 
