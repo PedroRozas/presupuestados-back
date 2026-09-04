@@ -53,7 +53,7 @@ Ver bloque `RECEIPT_*` en `.env.example`. `REDIS_URL` es obligatorio: sin Redis 
 
 En fase 2 los grupos se cierran solos 90 s después de la última foto (`RECEIPT_GROUP_WINDOW_SECONDS`) o de inmediato al enviar el texto `listo`. Al cerrar quedan en `needs_review` con motivo `extraction_pending` y el remitente recibe un aviso. Con `RECEIPT_MESSAGING_SOURCE=local` el aviso se imprime en los logs del servidor en vez de enviarse a WhatsApp.
 
-`RECEIPT_WORKER_CONCURRENCY` debe mantenerse en `1`, porque con concurrencia mayor a 1 pueden crearse grupos duplicados para el mismo remitente (ver comentario en `.env.example`).
+`RECEIPT_WORKER_CONCURRENCY` puede subirse; el índice único parcial `idx_receipt_groups_one_collecting_per_sender` evita grupos duplicados.
 
 ## 6. Migraciones
 

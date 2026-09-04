@@ -115,6 +115,9 @@ export const receiptGroups = pgTable(
   (t) => [
     index('idx_receipt_groups_couple_date').on(t.coupleId, t.receiptDate),
     index('idx_receipt_groups_sender_status').on(t.senderPhoneE164, t.status),
+    uniqueIndex('idx_receipt_groups_one_collecting_per_sender')
+      .on(t.coupleId, t.senderPhoneE164)
+      .where(sql`${t.status} = 'collecting'`),
   ],
 );
 

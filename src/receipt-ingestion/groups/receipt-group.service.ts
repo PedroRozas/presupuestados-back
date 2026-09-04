@@ -11,6 +11,14 @@ export interface ResolveOpenGroupInput {
   receivedAt: Date;
 }
 
+const UNIQUE_VIOLATION_CODE = '23505';
+
+const isUniqueViolation = (error: unknown): boolean =>
+  typeof error === 'object' &&
+  error !== null &&
+  'code' in error &&
+  (error as { code?: unknown }).code === UNIQUE_VIOLATION_CODE;
+
 @Injectable()
 export class ReceiptGroupService {
   constructor(
@@ -35,11 +43,27 @@ export class ReceiptGroupService {
       return open;
     }
 
-    return this.groups.create({
-      coupleId: input.coupleId,
-      createdByUserId: input.userId,
-      senderPhoneE164: input.senderPhoneE164,
-      lastImageAt: input.receivedAt,
-    });
+    return this.createOrReuse(input);
+  }
+
+  private async createOrReuse(
+    input: ResolveOpenGroupInput,
+  ): Promise<ReceiptGroup> {
+    try {
+      return await this.groups.create({
+        coupleId: input.coupleId,
+        createdByUserId: input.userId,
+        senderPhoneE164: input.senderPhoneE164,
+        lastImageAt: input.receivedAt,
+      });
+    } catch (error) {
+      if (!isUniqueViolation(error)) throw error;
+      const concurrent = await this.groups.findOpenBySender(
+        input.senderPhoneE164,
+        input.coupleId,
+      );
+      if (!concurrent) throw error;
+      return concurrent;
+    }
   }
 }
