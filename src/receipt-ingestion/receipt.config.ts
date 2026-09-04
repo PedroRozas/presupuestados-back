@@ -1,8 +1,13 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { RECEIPT_DEFAULTS } from './receipt.constants.js';
+import {
+  RECEIPT_DEFAULTS,
+  RECEIPT_MESSAGING_SOURCE_DEFAULT,
+} from './receipt.constants.js';
 
 export type ReceiptMediaSource = 'meta' | 'local';
+
+export type ReceiptMessagingSource = 'meta' | 'local';
 
 @Injectable()
 export class ReceiptConfigService {
@@ -42,6 +47,14 @@ export class ReceiptConfigService {
     const value = this.getString(
       'RECEIPT_MEDIA_SOURCE',
       RECEIPT_DEFAULTS.mediaSource,
+    );
+    return value === 'local' ? 'local' : 'meta';
+  }
+
+  get messagingSource(): ReceiptMessagingSource {
+    const value = this.getString(
+      'RECEIPT_MESSAGING_SOURCE',
+      RECEIPT_MESSAGING_SOURCE_DEFAULT,
     );
     return value === 'local' ? 'local' : 'meta';
   }

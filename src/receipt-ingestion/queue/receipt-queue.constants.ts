@@ -8,4 +8,28 @@ export interface IngestImageJobPayload {
   receivedAtIso: string;
 }
 
-export type ReceiptJobPayload = IngestImageJobPayload;
+export interface CloseGroupByWindowPayload {
+  kind: 'window';
+  groupId: string;
+  pageIndex: number;
+}
+
+export interface CloseGroupByCommandPayload {
+  kind: 'command';
+  senderPhoneE164: string;
+  coupleId: string;
+}
+
+export type CloseGroupJobPayload =
+  | CloseGroupByWindowPayload
+  | CloseGroupByCommandPayload;
+
+export interface NotifyUserJobPayload {
+  toPhoneE164: string;
+  body: string;
+}
+
+export type ReceiptJobPayload =
+  | IngestImageJobPayload
+  | CloseGroupJobPayload
+  | NotifyUserJobPayload;

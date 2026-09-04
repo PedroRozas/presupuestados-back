@@ -2,6 +2,8 @@ export const RECEIPT_QUEUE_NAME = 'receipts';
 
 export const RECEIPT_JOB = {
   INGEST_IMAGE: 'ingest-image',
+  CLOSE_GROUP: 'close-group',
+  NOTIFY_USER: 'notify-user',
 } as const;
 
 export type ReceiptJobName = (typeof RECEIPT_JOB)[keyof typeof RECEIPT_JOB];
@@ -77,3 +79,8 @@ const RETENTION_DAYS = 7;
 
 export const RECEIPT_FAILED_JOB_RETENTION_SECONDS =
   RETENTION_DAYS * HOURS_PER_DAY * MINUTES_PER_HOUR * SECONDS_PER_MINUTE;
+
+export const RECEIPT_REVIEW_REASON_EXTRACTION_PENDING = 'extraction_pending';
+export const RECEIPT_CLOSE_JOB_ID_PREFIX = 'close';
+export const RECEIPT_CLOSE_COMMAND_JOB_SUFFIX = 'command';
+export const RECEIPT_MESSAGING_SOURCE_DEFAULT = 'meta';
