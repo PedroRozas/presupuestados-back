@@ -2,6 +2,7 @@ import {
   ReceiptQueueService,
   ReceiptQueueUnavailableError,
   buildCloseGroupJobId,
+  buildCloseGroupJobOptions,
 } from './receipt-queue.service.js';
 import type { ReceiptConfigService } from '../receipt.config.js';
 import type { IngestImageJobPayload } from './receipt-queue.constants.js';
@@ -52,5 +53,33 @@ describe('buildCloseGroupJobId', () => {
         coupleId: 'c1',
       }),
     ).toBe('close-c1-56912345678-command');
+  });
+
+  it('agrega el sufijo de reprogramación para cierres por ventana', () => {
+    expect(
+      buildCloseGroupJobId({
+        kind: 'window',
+        groupId: 'g1',
+        pageIndex: 3,
+        reschedule: 1,
+      }),
+    ).toBe('close-g1-3-r1');
+  });
+
+  it('no agrega sufijo sin reschedule', () => {
+    expect(
+      buildCloseGroupJobId({ kind: 'window', groupId: 'g1', pageIndex: 3 }),
+    ).toBe('close-g1-3');
+  });
+});
+
+describe('buildCloseGroupJobOptions', () => {
+  it('arma jobId, delay y removeOnFail para el job de cierre', () => {
+    expect(
+      buildCloseGroupJobOptions(
+        { kind: 'window', groupId: 'g1', pageIndex: 3 },
+        5000,
+      ),
+    ).toEqual({ jobId: 'close-g1-3', delay: 5000, removeOnFail: true });
   });
 });

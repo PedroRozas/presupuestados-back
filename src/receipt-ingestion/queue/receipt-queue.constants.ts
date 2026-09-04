@@ -12,6 +12,7 @@ export interface CloseGroupByWindowPayload {
   kind: 'window';
   groupId: string;
   pageIndex: number;
+  reschedule?: number;
 }
 
 export interface CloseGroupByCommandPayload {

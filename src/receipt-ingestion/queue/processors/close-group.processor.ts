@@ -14,10 +14,12 @@ import type {
   CloseGroupJobPayload,
 } from '../receipt-queue.constants.js';
 
+export type CloseSkipReason = 'not_collecting' | 'superseded' | 'not_found';
+
 export type CloseGroupResult =
   | { outcome: 'closed'; groupId: string }
   | { outcome: 'rescheduled'; delayMs: number }
-  | { outcome: 'skipped'; reason: string }
+  | { outcome: 'skipped'; reason: CloseSkipReason }
   | { outcome: 'no_open_group' };
 
 export const CLOSE_GROUP_CLOCK = Symbol('CLOSE_GROUP_CLOCK');
@@ -45,11 +47,11 @@ export class CloseGroupProcessor {
       return this.handleMissingGroup(payload);
     }
 
-    const imageCount = (await this.images.nextPageIndex(group.id)) - 1;
+    const lastPageIndex = (await this.images.nextPageIndex(group.id)) - 1;
     const decision = decideCloseAction({
       status: group.status,
       lastImageAt: group.lastImageAt,
-      imageCount,
+      lastPageIndex,
       trigger:
         payload.kind === 'window'
           ? { kind: 'window', pageIndex: payload.pageIndex }
@@ -62,10 +64,23 @@ export class CloseGroupProcessor {
       return { outcome: 'skipped', reason: decision.reason };
     }
     if (decision.action === 'reschedule') {
-      await this.queue.enqueueCloseGroup(payload, decision.delayMs);
-      return { outcome: 'rescheduled', delayMs: decision.delayMs };
+      return this.reschedule(payload, decision.delayMs);
     }
-    return this.close(group, imageCount);
+    return this.close(group, lastPageIndex);
+  }
+
+  private async reschedule(
+    payload: CloseGroupJobPayload,
+    delayMs: number,
+  ): Promise<CloseGroupResult> {
+    if (payload.kind === 'command') {
+      return { outcome: 'skipped', reason: 'not_collecting' };
+    }
+    await this.queue.enqueueCloseGroup(
+      { ...payload, reschedule: (payload.reschedule ?? 0) + 1 },
+      delayMs,
+    );
+    return { outcome: 'rescheduled', delayMs };
   }
 
   private resolveGroup(
@@ -97,14 +112,20 @@ export class CloseGroupProcessor {
 
   private async close(
     group: ReceiptGroup,
-    imageCount: number,
+    lastPageIndex: number,
   ): Promise<CloseGroupResult> {
-    await this.groups.closeAsPendingExtraction(group.id, this.now());
+    const closed = await this.groups.closeAsPendingExtraction(
+      group.id,
+      this.now(),
+    );
+    if (!closed) {
+      return { outcome: 'skipped', reason: 'not_collecting' };
+    }
     await this.queue.enqueueNotifyUser({
       toPhoneE164: group.senderPhoneE164,
-      body: buildGroupClosedMessage({ pageCount: imageCount }),
+      body: buildGroupClosedMessage({ pageCount: lastPageIndex }),
     });
-    this.logger.log(`group_closed group=${group.id} pages=${imageCount}`);
+    this.logger.log(`group_closed group=${group.id} pages=${lastPageIndex}`);
     return { outcome: 'closed', groupId: group.id };
   }
 }

@@ -23,11 +23,14 @@ const build = (options: {
   byId?: ReceiptGroup | undefined;
   open?: ReceiptGroup | undefined;
   nextPageIndex?: number;
+  closeSucceeds?: boolean;
 }) => {
   const groups = {
     findById: jest.fn(() => Promise.resolve(options.byId)),
     findOpenBySender: jest.fn(() => Promise.resolve(options.open)),
-    closeAsPendingExtraction: jest.fn(() => Promise.resolve()),
+    closeAsPendingExtraction: jest.fn(() =>
+      Promise.resolve(options.closeSucceeds ?? true),
+    ),
   };
   const images = {
     nextPageIndex: jest.fn(() => Promise.resolve(options.nextPageIndex ?? 3)),
@@ -85,7 +88,7 @@ describe('CloseGroupProcessor', () => {
 
     expect(result).toEqual({ outcome: 'rescheduled', delayMs: 60 * 1000 });
     expect(queue.enqueueCloseGroup).toHaveBeenCalledWith(
-      { kind: 'window', groupId: 'group-1', pageIndex: 2 },
+      { kind: 'window', groupId: 'group-1', pageIndex: 2, reschedule: 1 },
       60 * 1000,
     );
     expect(groups.closeAsPendingExtraction).not.toHaveBeenCalled();
@@ -145,6 +148,23 @@ describe('CloseGroupProcessor', () => {
       toPhoneE164: '+56912345678',
       body: 'Recibí tu boleta (1 foto). Quedó guardada y pendiente de revisión.',
     });
+  });
+
+  it('omite y no notifica si otro proceso ya cerró el grupo primero', async () => {
+    const { processor, queue } = build({
+      byId: group({}),
+      nextPageIndex: 3,
+      closeSucceeds: false,
+    });
+
+    const result = await processor.process({
+      kind: 'window',
+      groupId: 'group-1',
+      pageIndex: 2,
+    });
+
+    expect(result).toEqual({ outcome: 'skipped', reason: 'not_collecting' });
+    expect(queue.enqueueNotifyUser).not.toHaveBeenCalled();
   });
 
   it('avisa que no hay boleta abierta si el comando llega sin grupo', async () => {

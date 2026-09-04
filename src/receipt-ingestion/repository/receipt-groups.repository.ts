@@ -68,8 +68,8 @@ export class ReceiptGroupsRepository {
   async closeAsPendingExtraction(
     groupId: string,
     closedAt: Date,
-  ): Promise<void> {
-    await this.db
+  ): Promise<boolean> {
+    const rows = await this.db
       .update(receiptGroups)
       .set({
         status: 'needs_review',
@@ -81,6 +81,8 @@ export class ReceiptGroupsRepository {
           eq(receiptGroups.id, groupId),
           eq(receiptGroups.status, 'collecting'),
         ),
-      );
+      )
+      .returning({ id: receiptGroups.id });
+    return rows.length > 0;
   }
 }

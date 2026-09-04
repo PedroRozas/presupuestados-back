@@ -9,7 +9,7 @@ export type CloseTrigger =
 export interface CloseDecisionInput {
   status: ReceiptGroupStatus;
   lastImageAt: Date | null;
-  imageCount: number;
+  lastPageIndex: number;
   trigger: CloseTrigger;
   now: Date;
   windowSeconds: number;
@@ -27,7 +27,7 @@ export const decideCloseAction = (input: CloseDecisionInput): CloseDecision => {
   if (input.trigger.kind === 'command' || !input.lastImageAt) {
     return { action: 'close' };
   }
-  if (input.imageCount > input.trigger.pageIndex) {
+  if (input.lastPageIndex > input.trigger.pageIndex) {
     return { action: 'skip', reason: 'superseded' };
   }
   const windowMs = input.windowSeconds * MILLISECONDS_PER_SECOND;

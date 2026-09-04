@@ -5,6 +5,7 @@ import { ReceiptConfigService } from '../receipt.config.js';
 import {
   RECEIPT_CLOSE_COMMAND_JOB_SUFFIX,
   RECEIPT_CLOSE_JOB_ID_PREFIX,
+  RECEIPT_CLOSE_RESCHEDULE_JOB_SUFFIX,
   RECEIPT_FAILED_JOB_RETENTION_SECONDS,
   RECEIPT_JOB,
   RECEIPT_QUEUE_NAME,
@@ -30,10 +31,25 @@ export class ReceiptQueueUnavailableError extends Error {
 
 const stripPlus = (phoneE164: string): string => phoneE164.replace(/^\+/, '');
 
-export const buildCloseGroupJobId = (payload: CloseGroupJobPayload): string =>
-  payload.kind === 'window'
-    ? `${RECEIPT_CLOSE_JOB_ID_PREFIX}-${payload.groupId}-${payload.pageIndex}`
-    : `${RECEIPT_CLOSE_JOB_ID_PREFIX}-${payload.coupleId}-${stripPlus(payload.senderPhoneE164)}-${RECEIPT_CLOSE_COMMAND_JOB_SUFFIX}`;
+export const buildCloseGroupJobId = (payload: CloseGroupJobPayload): string => {
+  if (payload.kind === 'window') {
+    const rescheduleSuffix =
+      typeof payload.reschedule === 'number' && payload.reschedule > 0
+        ? `-${RECEIPT_CLOSE_RESCHEDULE_JOB_SUFFIX}${payload.reschedule}`
+        : '';
+    return `${RECEIPT_CLOSE_JOB_ID_PREFIX}-${payload.groupId}-${payload.pageIndex}${rescheduleSuffix}`;
+  }
+  return `${RECEIPT_CLOSE_JOB_ID_PREFIX}-${payload.coupleId}-${stripPlus(payload.senderPhoneE164)}-${RECEIPT_CLOSE_COMMAND_JOB_SUFFIX}`;
+};
+
+export const buildCloseGroupJobOptions = (
+  payload: CloseGroupJobPayload,
+  delayMs: number,
+): { jobId: string; delay: number; removeOnFail: true } => ({
+  jobId: buildCloseGroupJobId(payload),
+  delay: delayMs,
+  removeOnFail: true,
+});
 
 @Injectable()
 export class ReceiptQueueService implements OnModuleDestroy {
@@ -56,10 +72,11 @@ export class ReceiptQueueService implements OnModuleDestroy {
     payload: CloseGroupJobPayload,
     delayMs: number,
   ): Promise<void> {
-    await this.getQueue().add(RECEIPT_JOB.CLOSE_GROUP, payload, {
-      jobId: buildCloseGroupJobId(payload),
-      delay: delayMs,
-    });
+    await this.getQueue().add(
+      RECEIPT_JOB.CLOSE_GROUP,
+      payload,
+      buildCloseGroupJobOptions(payload, delayMs),
+    );
     this.logger.log(
       `job_enqueued name=${RECEIPT_JOB.CLOSE_GROUP} kind=${payload.kind} delayMs=${delayMs}`,
     );

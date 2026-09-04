@@ -83,4 +83,5 @@ export const RECEIPT_FAILED_JOB_RETENTION_SECONDS =
 export const RECEIPT_REVIEW_REASON_EXTRACTION_PENDING = 'extraction_pending';
 export const RECEIPT_CLOSE_JOB_ID_PREFIX = 'close';
 export const RECEIPT_CLOSE_COMMAND_JOB_SUFFIX = 'command';
+export const RECEIPT_CLOSE_RESCHEDULE_JOB_SUFFIX = 'r';
 export const RECEIPT_MESSAGING_SOURCE_DEFAULT = 'meta';

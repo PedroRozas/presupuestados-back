@@ -6,7 +6,7 @@ describe('decideCloseAction', () => {
     new Date(now.getTime() - seconds * 1000);
   const base = {
     status: 'collecting' as const,
-    imageCount: 2,
+    lastPageIndex: 2,
     now,
     windowSeconds: 90,
   };

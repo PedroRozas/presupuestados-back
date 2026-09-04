@@ -53,8 +53,10 @@ Ver bloque `RECEIPT_*` en `.env.example`. `REDIS_URL` es obligatorio: sin Redis 
 
 En fase 2 los grupos se cierran solos 90 s después de la última foto (`RECEIPT_GROUP_WINDOW_SECONDS`) o de inmediato al enviar el texto `listo`. Al cerrar quedan en `needs_review` con motivo `extraction_pending` y el remitente recibe un aviso. Con `RECEIPT_MESSAGING_SOURCE=local` el aviso se imprime en los logs del servidor en vez de enviarse a WhatsApp.
 
-`RECEIPT_WORKER_CONCURRENCY` puede subirse; el índice único parcial `idx_receipt_groups_one_collecting_per_sender` evita grupos duplicados.
+`RECEIPT_WORKER_CONCURRENCY` debe quedarse en 1: el índice único evita grupos duplicados, pero la asignación de `page_index` no es atómica y con más de un worker dos fotos del mismo grupo pueden pisarse en Storage.
 
 ## 6. Migraciones
 
 La migración `drizzle/0004_daffy_triton.sql` (tablas `receipt_*`) se aplicó con `psql --single-transaction -f drizzle/0004_daffy_triton.sql` porque `drizzle.__drizzle_migrations` está vacía en esta base de datos. **Nunca correr `npm run db:migrate` contra esta base**: reproduciría las migraciones 0000-0004 desde cero y fallaría al chocar con objetos ya existentes. Las migraciones futuras deben aplicarse de la misma forma (`psql --single-transaction -f <archivo>`) hasta que `drizzle.__drizzle_migrations` refleje el historial real.
+
+La migración `drizzle/0005_familiar_silver_sable.sql` se aplicó de la misma forma (`psql --single-transaction`) el 2026-09-04.
