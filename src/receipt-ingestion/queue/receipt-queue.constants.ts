@@ -30,7 +30,14 @@ export interface NotifyUserJobPayload {
   body: string;
 }
 
+export interface ExtractGroupJobPayload {
+  groupId: string;
+  coupleId: string;
+  senderPhoneE164: string;
+}
+
 export type ReceiptJobPayload =
   | IngestImageJobPayload
   | CloseGroupJobPayload
-  | NotifyUserJobPayload;
+  | NotifyUserJobPayload
+  | ExtractGroupJobPayload;

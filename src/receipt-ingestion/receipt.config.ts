@@ -135,6 +135,49 @@ export class ReceiptConfigService {
     return this.configService.get<string>('REDIS_URL') || undefined;
   }
 
+  get openAiApiKey(): string {
+    return this.configService.getOrThrow<string>('OPENAI_API_KEY');
+  }
+
+  get extractionModel(): string {
+    return this.configService.getOrThrow<string>('RECEIPT_EXTRACTION_MODEL');
+  }
+
+  get extractionMaxOutputTokens(): number {
+    return this.getNumber(
+      'RECEIPT_EXTRACTION_MAX_OUTPUT_TOKENS',
+      RECEIPT_DEFAULTS.extractionMaxOutputTokens,
+    );
+  }
+
+  get extractionTimeoutMs(): number {
+    return this.getNumber(
+      'RECEIPT_EXTRACTION_TIMEOUT_MS',
+      RECEIPT_DEFAULTS.extractionTimeoutMs,
+    );
+  }
+
+  get minConfidence(): number {
+    return this.getRatio(
+      'RECEIPT_MIN_CONFIDENCE',
+      RECEIPT_DEFAULTS.minConfidence,
+    );
+  }
+
+  get totalToleranceClp(): number {
+    return this.getNumber(
+      'RECEIPT_TOTAL_TOLERANCE_CLP',
+      RECEIPT_DEFAULTS.totalToleranceClp,
+    );
+  }
+
+  get monthlyExtractionCap(): number {
+    return this.getNumber(
+      'RECEIPT_MONTHLY_EXTRACTION_CAP',
+      RECEIPT_DEFAULTS.monthlyExtractionCap,
+    );
+  }
+
   private getString(key: string, fallback: string): string {
     const value = this.configService.get<string>(key);
     return value && value.length > 0 ? value : fallback;
@@ -143,6 +186,13 @@ export class ReceiptConfigService {
   private getNumber(key: string, fallback: number): number {
     const value = Number(this.configService.get<string>(key));
     return Number.isFinite(value) && value > 0 ? value : fallback;
+  }
+
+  private getRatio(key: string, fallback: number): number {
+    const value = Number(this.configService.get<string>(key));
+    return Number.isFinite(value) && value >= 0 && value <= 1
+      ? value
+      : fallback;
   }
 
   private getBoolean(key: string, fallback: boolean): boolean {

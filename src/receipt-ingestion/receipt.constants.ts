@@ -4,6 +4,7 @@ export const RECEIPT_JOB = {
   INGEST_IMAGE: 'ingest-image',
   CLOSE_GROUP: 'close-group',
   NOTIFY_USER: 'notify-user',
+  EXTRACT_GROUP: 'extract-group',
 } as const;
 
 export type ReceiptJobName = (typeof RECEIPT_JOB)[keyof typeof RECEIPT_JOB];
@@ -64,6 +65,11 @@ export const RECEIPT_DEFAULTS = {
   workerConcurrency: 1,
   retryAttempts: 3,
   retryBackoffMs: 5000,
+  extractionMaxOutputTokens: 8000,
+  extractionTimeoutMs: 90000,
+  minConfidence: 0.85,
+  totalToleranceClp: 50,
+  monthlyExtractionCap: 300,
 } as const;
 
 export const RECEIPT_IMAGE_CONTENT_TYPE = 'image/webp';
@@ -85,3 +91,22 @@ export const RECEIPT_CLOSE_JOB_ID_PREFIX = 'close';
 export const RECEIPT_CLOSE_COMMAND_JOB_SUFFIX = 'command';
 export const RECEIPT_CLOSE_RESCHEDULE_JOB_SUFFIX = 'r';
 export const RECEIPT_MESSAGING_SOURCE_DEFAULT = 'meta';
+
+export const RECEIPT_REVIEW_REASONS = {
+  TOTAL_MISMATCH: 'total_mismatch',
+  LOW_CONFIDENCE: 'low_confidence',
+  HANDWRITTEN: 'handwritten',
+  MISSING_DATE: 'missing_date',
+  EXTRACTION_FAILED: 'extraction_failed',
+  MONTHLY_CAP: 'monthly_cap',
+} as const;
+
+export type ReceiptReviewReason =
+  (typeof RECEIPT_REVIEW_REASONS)[keyof typeof RECEIPT_REVIEW_REASONS];
+
+export const RECEIPT_EXTRACTION_STATUS = {
+  SUCCEEDED: 'succeeded',
+  FAILED: 'failed',
+} as const;
+
+export const RECEIPT_PROMPT_VERSION_V1 = 'v1';
