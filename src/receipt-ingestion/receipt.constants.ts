@@ -59,7 +59,7 @@ export const RECEIPT_DEFAULTS = {
   maxWidthPx: 2000,
   rateLimitWindowSeconds: 60,
   rateLimitMax: 20,
-  workerConcurrency: 2,
+  workerConcurrency: 1,
   retryAttempts: 3,
   retryBackoffMs: 5000,
 } as const;

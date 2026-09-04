@@ -54,4 +54,14 @@ describe('isWithinGroupWindow', () => {
       }),
     ).toBe(true);
   });
+
+  it('es falso si la imagen es mucho más antigua que la última recibida', () => {
+    expect(
+      isWithinGroupWindow({
+        lastImageAt: base,
+        receivedAt: secondsAfter(-3600),
+        windowSeconds: 90,
+      }),
+    ).toBe(false);
+  });
 });

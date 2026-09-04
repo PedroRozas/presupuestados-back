@@ -8,6 +8,8 @@ export interface GroupWindowInput {
 
 export const isWithinGroupWindow = (input: GroupWindowInput): boolean => {
   if (!input.lastImageAt) return false;
-  const elapsedMs = input.receivedAt.getTime() - input.lastImageAt.getTime();
+  const elapsedMs = Math.abs(
+    input.receivedAt.getTime() - input.lastImageAt.getTime(),
+  );
   return elapsedMs <= input.windowSeconds * MILLISECONDS_PER_SECOND;
 };
