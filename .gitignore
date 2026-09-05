@@ -8,3 +8,5 @@ dist
 .claude
 .superpowers/
 tmp/
+docs/receipts/benchmark/images/
+docs/receipts/benchmark/ground-truth.json

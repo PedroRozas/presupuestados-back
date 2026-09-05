@@ -1,0 +1,9 @@
+[
+  {
+    "id": "jumbo-2026-09-01",
+    "images": ["jumbo-2026-09-01-p1.jpg", "jumbo-2026-09-01-p2.jpg"],
+    "receipt_date": "2026-09-01",
+    "total": 34890,
+    "item_amounts": [1290, 2190, 5990, -500]
+  }
+]
