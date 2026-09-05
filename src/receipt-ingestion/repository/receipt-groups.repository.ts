@@ -126,4 +126,11 @@ export class ReceiptGroupsRepository {
       .returning({ id: receiptGroups.id });
     return rows.length > 0;
   }
+
+  async setMerchant(groupId: string, merchantId: string): Promise<void> {
+    await this.db
+      .update(receiptGroups)
+      .set({ merchantId })
+      .where(eq(receiptGroups.id, groupId));
+  }
 }

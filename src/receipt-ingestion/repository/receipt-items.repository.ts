@@ -1,10 +1,13 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { DRIZZLE } from '../../database/database.module.js';
 import * as schema from '../../database/schema/index.js';
 import { receiptItems } from '../../database/schema/index.js';
-import type { NewReceiptItem } from '../../database/schema/index.js';
+import type {
+  NewReceiptItem,
+  ReceiptItem,
+} from '../../database/schema/index.js';
 
 @Injectable()
 export class ReceiptItemsRepository {
@@ -22,5 +25,20 @@ export class ReceiptItemsRepository {
         await tx.insert(receiptItems).values(items);
       }
     });
+  }
+
+  async listByGroup(groupId: string): Promise<ReceiptItem[]> {
+    return this.db
+      .select()
+      .from(receiptItems)
+      .where(eq(receiptItems.groupId, groupId))
+      .orderBy(asc(receiptItems.position));
+  }
+
+  async setProduct(itemId: string, productId: string): Promise<void> {
+    await this.db
+      .update(receiptItems)
+      .set({ productId })
+      .where(eq(receiptItems.id, itemId));
   }
 }

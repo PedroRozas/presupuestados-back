@@ -1,10 +1,18 @@
-// eslint-disable-next-line no-control-regex
-const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f]/g;
+const MAX_CONTROL_CODE_POINT = 0x1f;
+const DELETE_CODE_POINT = 0x7f;
 const WHITESPACE_RUN = /\s+/g;
 
+const replaceControlCharacters = (raw: string): string =>
+  Array.from(raw, (character) => {
+    const codePoint = character.codePointAt(0) ?? 0;
+    return codePoint <= MAX_CONTROL_CODE_POINT ||
+      codePoint === DELETE_CODE_POINT
+      ? ' '
+      : character;
+  }).join('');
+
 export const toCanonicalName = (raw: string): string =>
-  raw
-    .replace(CONTROL_CHARACTERS, ' ')
+  replaceControlCharacters(raw)
     .replace(WHITESPACE_RUN, ' ')
     .trim()
     .toUpperCase();
