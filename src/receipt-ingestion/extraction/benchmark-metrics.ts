@@ -18,6 +18,7 @@ export interface ScoredRun extends ReceiptScore {
   tokensIn: number;
   tokensOut: number;
   latencyMs: number;
+  failed: boolean;
 }
 
 export interface ModelSummary {
@@ -28,6 +29,7 @@ export interface ModelSummary {
   avgTokensIn: number;
   avgTokensOut: number;
   avgLatencyMs: number;
+  failures: number;
 }
 
 const PERCENT = 100;
@@ -75,6 +77,7 @@ export const aggregateScores = (runs: ScoredRun[]): ModelSummary => ({
   avgTokensIn: average(runs.map((run) => run.tokensIn)),
   avgTokensOut: average(runs.map((run) => run.tokensOut)),
   avgLatencyMs: average(runs.map((run) => run.latencyMs)),
+  failures: runs.filter((run) => run.failed).length,
 });
 
 const percent = (ratio: number): string =>
@@ -84,10 +87,10 @@ export const renderMarkdownTable = (
   results: Record<string, ModelSummary>,
 ): string => {
   const header =
-    '| Modelo | Boletas | Total exacto | Fecha exacta | Recall montos | Tokens in/out | Latencia ms |\n| --- | --- | --- | --- | --- | --- | --- |';
+    '| Modelo | Boletas | Total exacto | Fecha exacta | Recall montos | Tokens in/out | Latencia ms | Fallos |\n| --- | --- | --- | --- | --- | --- | --- | --- |';
   const rows = Object.entries(results).map(
     ([model, s]) =>
-      `| ${model} | ${s.receipts} | ${percent(s.totalAccuracy)} | ${percent(s.dateAccuracy)} | ${percent(s.itemAmountRecall)} | ${Math.round(s.avgTokensIn)}/${Math.round(s.avgTokensOut)} | ${Math.round(s.avgLatencyMs)} |`,
+      `| ${model} | ${s.receipts} | ${percent(s.totalAccuracy)} | ${percent(s.dateAccuracy)} | ${percent(s.itemAmountRecall)} | ${Math.round(s.avgTokensIn)}/${Math.round(s.avgTokensOut)} | ${Math.round(s.avgLatencyMs)} | ${s.failures} |`,
   );
   return [header, ...rows].join('\n');
 };

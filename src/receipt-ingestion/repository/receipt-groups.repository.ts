@@ -8,7 +8,10 @@ import type {
   NewReceiptGroup,
   ReceiptGroup,
 } from '../../database/schema/index.js';
-import type { ReceiptSourceKind } from '../receipt.constants.js';
+import type {
+  ReceiptReviewReason,
+  ReceiptSourceKind,
+} from '../receipt.constants.js';
 
 export class ReceiptGroupInsertError extends Error {
   constructor() {
@@ -19,7 +22,7 @@ export class ReceiptGroupInsertError extends Error {
 
 export interface ExtractionHeader {
   status: 'ready' | 'needs_review';
-  reviewReasons: string[];
+  reviewReasons: ReceiptReviewReason[];
   merchantRaw: string | null;
   receiptDate: string | null;
   totalDeclared: string | null;
@@ -107,10 +110,20 @@ export class ReceiptGroupsRepository {
       .where(eq(receiptGroups.id, groupId));
   }
 
-  async markFailed(groupId: string, reviewReasons: string[]): Promise<void> {
-    await this.db
+  async markFailed(
+    groupId: string,
+    reviewReasons: ReceiptReviewReason[],
+  ): Promise<boolean> {
+    const rows = await this.db
       .update(receiptGroups)
       .set({ status: 'failed', reviewReasons })
-      .where(eq(receiptGroups.id, groupId));
+      .where(
+        and(
+          eq(receiptGroups.id, groupId),
+          eq(receiptGroups.status, 'extracting'),
+        ),
+      )
+      .returning({ id: receiptGroups.id });
+    return rows.length > 0;
   }
 }

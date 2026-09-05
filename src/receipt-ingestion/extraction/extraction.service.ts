@@ -6,6 +6,7 @@ import type {
   ReceiptImage,
 } from '../../database/schema/index.js';
 import {
+  hasLlmUsage,
   LLM_EXTRACTION_PROVIDER,
   type LlmExtractionProvider,
   type LlmExtractionResult,
@@ -102,7 +103,6 @@ export class ExtractionService {
       return { outcome: 'skipped', reason: 'no_images' };
     }
 
-    const buffers = await this.downloadAll(images);
     if (!(await this.reserveUsage(group))) {
       await this.groups.markFailed(group.id, [
         RECEIPT_REVIEW_REASONS.MONTHLY_CAP,
@@ -110,6 +110,7 @@ export class ExtractionService {
       return { outcome: 'monthly_cap' };
     }
 
+    const buffers = await this.downloadAll(images);
     const output = await this.callModel(group, input.attempt, buffers);
     return this.persist(group, output.parsed, output.result, input.attempt);
   }
@@ -160,16 +161,17 @@ export class ExtractionService {
     result: LlmExtractionResult,
     error: unknown,
   ): Promise<void> {
+    const usage = hasLlmUsage(error) ? error.usage : result;
     const message = error instanceof Error ? error.message : String(error);
     await this.extractions.create({
       groupId: group.id,
       coupleId: group.coupleId,
-      model: result.model,
+      model: usage.model,
       promptVersion: EXTRACTION_PROMPT_V1.version,
       rawJson: result.rawText ? { raw_text: result.rawText } : null,
-      tokensIn: result.tokensIn,
-      tokensOut: result.tokensOut,
-      latencyMs: result.latencyMs,
+      tokensIn: usage.tokensIn,
+      tokensOut: usage.tokensOut,
+      latencyMs: usage.latencyMs,
       attempt,
       status: RECEIPT_EXTRACTION_STATUS.FAILED,
       error: message,

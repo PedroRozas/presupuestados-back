@@ -72,9 +72,9 @@ La migración `drizzle/0004_daffy_triton.sql` (tablas `receipt_*`) se aplicó co
 
 La migración `drizzle/0005_familiar_silver_sable.sql` se aplicó de la misma forma (`psql --single-transaction`) el 2026-09-04.
 
-## 7. Costos y métricas
+## 7. Uso de tokens y latencia
 
-Consulta mensual de uso y costo aproximado de la extracción, por modelo:
+Consulta mensual de uso de la extracción, por modelo:
 
 ```sql
 select date_trunc('month', created_at) as mes, model, count(*) as llamadas,

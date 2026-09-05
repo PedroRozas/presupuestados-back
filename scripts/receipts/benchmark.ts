@@ -1,4 +1,4 @@
-import { readFile, readdir, writeFile } from 'node:fs/promises';
+import { access, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import { extname, join } from 'node:path';
 import { ConfigService } from '@nestjs/config';
 import { ReceiptConfigService } from '../../src/receipt-ingestion/receipt.config.js';
@@ -18,6 +18,7 @@ import type { LlmImageInput } from '../../src/receipt-ingestion/llm/llm.interfac
 const BENCHMARK_DIR = 'docs/receipts/benchmark';
 const IMAGES_DIR = join(BENCHMARK_DIR, 'images');
 const GROUND_TRUTH_FILE = join(BENCHMARK_DIR, 'ground-truth.json');
+const OUTPUTS_DIR = join(BENCHMARK_DIR, 'outputs');
 const RESULTS_FILE = 'docs/receipts/benchmark.md';
 const DEFAULT_MIME_TYPE = 'image/jpeg';
 const MIME_BY_EXTENSION: Record<string, string> = {
@@ -28,6 +29,25 @@ const MIME_BY_EXTENSION: Record<string, string> = {
 };
 const USAGE = 'Uso: npm run receipts:benchmark -- <modelo1,modelo2,...>';
 const DATE_LENGTH = 10;
+const MISSING_FIXTURES_MESSAGE =
+  'Falta docs/receipts/benchmark/images/ o ground-truth.json: ver docs/receipts/benchmark/README.md';
+const FAILED_RUN: Omit<ScoredRun, 'failed'> = {
+  totalMatch: false,
+  dateMatch: false,
+  itemAmountRecall: 0,
+  tokensIn: 0,
+  tokensOut: 0,
+  latencyMs: 0,
+};
+
+const assertFixturesExist = async (): Promise<void> => {
+  try {
+    await access(IMAGES_DIR);
+    await access(GROUND_TRUTH_FILE);
+  } catch {
+    throw new Error(MISSING_FIXTURES_MESSAGE);
+  }
+};
 
 const definedEnv = (): Record<string, string> =>
   Object.fromEntries(
@@ -63,9 +83,20 @@ const loadImages = (files: string[]): Promise<LlmImageInput[]> =>
     })),
   );
 
+const dumpRawOutput = async (
+  model: string,
+  receiptId: string,
+  rawText: string,
+): Promise<void> => {
+  const dir = join(OUTPUTS_DIR, model);
+  await mkdir(dir, { recursive: true });
+  await writeFile(join(dir, `${receiptId}.txt`), rawText);
+};
+
 const runReceipt = async (
   provider: OpenAiLlmProvider,
   config: ReceiptConfigService,
+  model: string,
   receipt: GroundTruthReceipt,
 ): Promise<ScoredRun> => {
   const result = await provider.extract({
@@ -77,12 +108,14 @@ const runReceipt = async (
     maxOutputTokens: config.extractionMaxOutputTokens,
     timeoutMs: config.extractionTimeoutMs,
   });
+  await dumpRawOutput(model, receipt.id, result.rawText);
   const score = scoreExtraction(receipt, parseExtractionOutput(result.rawText));
   return {
     ...score,
     tokensIn: result.tokensIn,
     tokensOut: result.tokensOut,
     latencyMs: result.latencyMs,
+    failed: false,
   };
 };
 
@@ -94,16 +127,26 @@ const runModel = async (
   const provider = new OpenAiLlmProvider(config);
   const runs: ScoredRun[] = [];
   for (const receipt of receipts) {
-    const run = await runReceipt(provider, config, receipt);
+    let run: ScoredRun;
+    try {
+      run = await runReceipt(provider, config, model, receipt);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      process.stdout.write(`${model} ${receipt.id} FAILED: ${message}\n`);
+      run = { ...FAILED_RUN, failed: true };
+    }
     runs.push(run);
-    process.stdout.write(
-      `${model} ${receipt.id} total=${run.totalMatch} date=${run.dateMatch} recall=${run.itemAmountRecall.toFixed(2)}\n`,
-    );
+    if (!run.failed) {
+      process.stdout.write(
+        `${model} ${receipt.id} total=${run.totalMatch} date=${run.dateMatch} recall=${run.itemAmountRecall.toFixed(2)}\n`,
+      );
+    }
   }
   return aggregateScores(runs);
 };
 
 const main = async (): Promise<void> => {
+  await assertFixturesExist();
   const models = readModels();
   const receipts = JSON.parse(
     await readFile(GROUND_TRUTH_FILE, 'utf8'),

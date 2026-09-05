@@ -85,4 +85,12 @@ describe('parseExtractionOutput', () => {
       ),
     ).toThrow(ExtractionOutputInvalidError);
   });
+
+  it('rechaza una moneda distinta de CLP', () => {
+    expect(() =>
+      parseExtractionOutput(
+        JSON.stringify({ ...validOutput, currency: 'USD' }),
+      ),
+    ).toThrow(ExtractionOutputInvalidError);
+  });
 });

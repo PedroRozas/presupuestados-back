@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  RECEIPT_CURRENCY_DEFAULT,
   RECEIPT_PRODUCT_CATEGORIES,
   RECEIPT_SOURCE_KINDS,
 } from '../receipt.constants.js';
@@ -40,7 +41,7 @@ export const extractionOutputSchema = z.object({
   merchant_rut: z.string().nullable(),
   receipt_date: isoDateSchema.nullable(),
   total: z.number().nullable(),
-  currency: z.string().min(1),
+  currency: z.literal(RECEIPT_CURRENCY_DEFAULT),
   source_kind: z.enum(RECEIPT_SOURCE_KINDS),
   items: z.array(itemSchema),
   confidence: confidenceSchema,

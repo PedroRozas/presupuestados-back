@@ -99,9 +99,16 @@ describe('OpenAiLlmProvider', () => {
       output_text: '{"partial":',
       status: 'incomplete',
       incomplete_details: { reason: 'max_output_tokens' },
-      usage: undefined,
+      usage: { input_tokens: 42, output_tokens: 7 },
       model: 'm',
     });
     await expect(provider.extract(input)).rejects.toThrow('max_output_tokens');
+    await expect(provider.extract(input)).rejects.toMatchObject({
+      usage: expect.objectContaining({
+        tokensIn: 42,
+        tokensOut: 7,
+        model: 'm',
+      }) as unknown,
+    });
   });
 });

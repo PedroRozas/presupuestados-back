@@ -1,4 +1,5 @@
 import {
+  RECEIPT_CURRENCY_DEFAULT,
   RECEIPT_PRODUCT_CATEGORIES,
   RECEIPT_PROMPT_VERSION_V1,
   RECEIPT_SOURCE_KINDS,
@@ -12,8 +13,17 @@ export interface ExtractionPrompt {
   outputJsonSchema: Record<string, unknown>;
 }
 
+const ISO_DATE_PATTERN = '^\\d{4}-\\d{2}-\\d{2}$';
+const MIN_CONFIDENCE = 0;
+const MAX_CONFIDENCE = 1;
+
 const nullableNumber = { type: ['number', 'null'] };
 const nullableString = { type: ['string', 'null'] };
+const confidenceJsonSchema = {
+  type: 'number',
+  minimum: MIN_CONFIDENCE,
+  maximum: MAX_CONFIDENCE,
+};
 
 const itemJsonSchema = {
   type: 'object',
@@ -38,7 +48,7 @@ const itemJsonSchema = {
       description: 'Una categoría de la lista. Si ninguna encaja, otros.',
     },
     confidence: {
-      type: 'number',
+      ...confidenceJsonSchema,
       description: 'Confianza de 0 a 1 en la lectura de esta línea.',
     },
   },
@@ -81,6 +91,7 @@ warnings: anota en español cualquier problema de lectura (borroso, cortado, dud
       },
       receipt_date: {
         ...nullableString,
+        pattern: ISO_DATE_PATTERN,
         description: 'Fecha de la boleta YYYY-MM-DD.',
       },
       total: {
@@ -89,11 +100,12 @@ warnings: anota en español cualquier problema de lectura (borroso, cortado, dud
       },
       currency: {
         type: 'string',
-        description: 'Código de moneda, normalmente CLP.',
+        enum: [RECEIPT_CURRENCY_DEFAULT],
+        description: 'Código de moneda, siempre CLP.',
       },
       source_kind: { type: 'string', enum: [...RECEIPT_SOURCE_KINDS] },
       items: { type: 'array', items: itemJsonSchema },
-      confidence: { type: 'number' },
+      confidence: confidenceJsonSchema,
       warnings: { type: 'array', items: { type: 'string' } },
     },
     required: [

@@ -305,4 +305,35 @@ describe('ExtractionService.extractGroup', () => {
       }),
     );
   });
+
+  it('registra los tokens reales cuando el proveedor falla tras completar la llamada', async () => {
+    const providerError = Object.assign(
+      new Error('llm_incomplete_response reason=max_output_tokens'),
+      {
+        usage: {
+          model: 'test-model',
+          tokensIn: 42,
+          tokensOut: 7,
+          latencyMs: 1234,
+        },
+      },
+    );
+    const { service, extractions } = build({
+      group: group(),
+      providerError,
+    });
+
+    await expect(service.extractGroup(input)).rejects.toThrow(
+      'llm_incomplete_response',
+    );
+    expect(extractions.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'failed',
+        model: 'test-model',
+        tokensIn: 42,
+        tokensOut: 7,
+        latencyMs: 1234,
+      }),
+    );
+  });
 });

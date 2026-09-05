@@ -26,3 +26,28 @@ export interface LlmExtractionResult {
 export interface LlmExtractionProvider {
   extract(input: LlmExtractionInput): Promise<LlmExtractionResult>;
 }
+
+export interface LlmCallUsage {
+  model: string;
+  tokensIn: number;
+  tokensOut: number;
+  latencyMs: number;
+}
+
+const isFiniteNumber = (value: unknown): value is number =>
+  typeof value === 'number' && Number.isFinite(value);
+
+export const hasLlmUsage = (
+  error: unknown,
+): error is { usage: LlmCallUsage } => {
+  if (typeof error !== 'object' || error === null) return false;
+  const usage = (error as Record<string, unknown>)['usage'];
+  if (typeof usage !== 'object' || usage === null) return false;
+  const candidate = usage as Record<string, unknown>;
+  return (
+    typeof candidate['model'] === 'string' &&
+    isFiniteNumber(candidate['tokensIn']) &&
+    isFiniteNumber(candidate['tokensOut']) &&
+    isFiniteNumber(candidate['latencyMs'])
+  );
+};

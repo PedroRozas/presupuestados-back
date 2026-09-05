@@ -44,9 +44,13 @@ export class ExtractGroupProcessor {
   }
 
   async onExhausted(payload: ExtractGroupJobPayload): Promise<void> {
-    await this.groups.markFailed(payload.groupId, [
+    const marked = await this.groups.markFailed(payload.groupId, [
       RECEIPT_REVIEW_REASONS.EXTRACTION_FAILED,
     ]);
+    if (!marked) {
+      this.logger.log(`extraction_exhausted_ignored group=${payload.groupId}`);
+      return;
+    }
     await this.queue.enqueueNotifyUser({
       toPhoneE164: payload.senderPhoneE164,
       body: buildExtractionFailedMessage(),
@@ -56,7 +60,11 @@ export class ExtractGroupProcessor {
 
   private messageFor(outcome: ExtractionOutcome): string | undefined {
     if (outcome.outcome === 'monthly_cap') return buildMonthlyCapMessage();
-    if (outcome.outcome !== 'extracted') return undefined;
+    if (outcome.outcome === 'skipped') {
+      return outcome.reason === 'no_images'
+        ? buildExtractionFailedMessage()
+        : undefined;
+    }
     return outcome.status === 'ready'
       ? buildExtractionReadyMessage(outcome.summary)
       : buildExtractionReviewMessage(outcome.summary, outcome.reasons);

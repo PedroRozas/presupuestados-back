@@ -10,3 +10,4 @@ dist
 tmp/
 docs/receipts/benchmark/images/
 docs/receipts/benchmark/ground-truth.json
+docs/receipts/benchmark/outputs/
