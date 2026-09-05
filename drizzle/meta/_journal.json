@@ -43,6 +43,13 @@
       "when": 1788542075694,
       "tag": "0005_familiar_silver_sable",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788652057947,
+      "tag": "0006_talented_blade",
+      "breakpoints": true
     }
   ]
 }

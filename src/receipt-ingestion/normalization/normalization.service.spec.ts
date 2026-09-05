@@ -12,17 +12,19 @@ import type {
 } from '../../database/schema/index.js';
 import type { ScoredCandidate } from './match-decision.js';
 
-const group = (
-  overrides: Partial<ReceiptGroup> & { merchantRut?: string | null } = {},
-): ReceiptGroup =>
+const group = (overrides: Partial<ReceiptGroup> = {}): ReceiptGroup =>
   ({
     id: 'g1',
     coupleId: 'c1',
     status: 'ready',
+    merchantId: null,
     merchantRaw: null,
     merchantRut: null,
     ...overrides,
   }) as ReceiptGroup;
+
+const firstCallArg = <T>(fn: jest.Mock<unknown, unknown[]>): T =>
+  fn.mock.calls[0]?.[0] as T;
 
 const item = (overrides: Partial<ReceiptItem> = {}): ReceiptItem =>
   ({
@@ -198,6 +200,30 @@ describe('NormalizationService.normalizeGroup', () => {
     });
   });
 
+  it('omite el merchant ya asignado sin llamar a repositorio ni LLM', async () => {
+    const { service, merchants, groups, provider } = build({
+      group: group({
+        merchantId: 'm-existing',
+        merchantRaw: 'Jumbo Providencia',
+        merchantRut: '76.123.456-7',
+      }),
+      items: [],
+    });
+
+    const result = await service.normalizeGroup(input);
+
+    expect(merchants.findByRut).not.toHaveBeenCalled();
+    expect(merchants.findCandidates).not.toHaveBeenCalled();
+    expect(merchants.create).not.toHaveBeenCalled();
+    expect(groups.setMerchant).not.toHaveBeenCalled();
+    expect(provider.chooseCandidates).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      outcome: 'normalized',
+      merchant: 'matched',
+      items: { matched: 0, created: 0, llmDecided: 0 },
+    });
+  });
+
   it('resuelve un ítem ambiguo con una llamada al LLM que devuelve un candidato', async () => {
     const { service, provider, items, products } = build({
       group: group(),
@@ -215,9 +241,9 @@ describe('NormalizationService.normalizeGroup', () => {
     const result = await service.normalizeGroup(input);
 
     expect(provider.chooseCandidates).toHaveBeenCalledTimes(1);
-    const call = (
-      (provider.chooseCandidates as jest.Mock).mock.calls[0] as unknown[]
-    )?.[0] as { questions: { key: string }[] };
+    const call = firstCallArg<{ questions: { key: string }[] }>(
+      provider.chooseCandidates,
+    );
     expect(call.questions).toHaveLength(1);
     expect(call.questions[0]?.key).toBe('i1');
     expect(items.setProduct).toHaveBeenCalledWith('i1', 'p9');
@@ -291,9 +317,9 @@ describe('NormalizationService.normalizeGroup', () => {
     await service.normalizeGroup(input);
 
     expect(provider.chooseCandidates).toHaveBeenCalledTimes(1);
-    const call = (
-      (provider.chooseCandidates as jest.Mock).mock.calls[0] as unknown[]
-    )?.[0] as { questions: { key: string }[] };
+    const call = firstCallArg<{ questions: { key: string }[] }>(
+      provider.chooseCandidates,
+    );
     expect(call.questions).toHaveLength(2);
   });
 

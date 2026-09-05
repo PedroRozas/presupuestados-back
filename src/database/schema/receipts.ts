@@ -99,6 +99,7 @@ export const receiptGroups = pgTable(
     receiptDate: date('receipt_date'),
     merchantId: uuid('merchant_id').references(() => receiptMerchants.id),
     merchantRaw: text('merchant_raw'),
+    merchantRut: text('merchant_rut'),
     totalDeclared: numeric('total_declared'),
     currency: text('currency').notNull().default('CLP'),
     sourceKind: receiptSourceKind('source_kind').notNull().default('unknown'),

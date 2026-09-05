@@ -202,6 +202,7 @@ export class ExtractionService {
       status: verdict.status,
       reviewReasons: verdict.reasons,
       merchantRaw: parsed.merchant_raw,
+      merchantRut: parsed.merchant_rut,
       receiptDate: parsed.receipt_date,
       totalDeclared: toNumericString(parsed.total),
       currency: parsed.currency,

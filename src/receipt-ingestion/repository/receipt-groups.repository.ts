@@ -24,6 +24,7 @@ export interface ExtractionHeader {
   status: 'ready' | 'needs_review';
   reviewReasons: ReceiptReviewReason[];
   merchantRaw: string | null;
+  merchantRut: string | null;
   receiptDate: string | null;
   totalDeclared: string | null;
   currency: string;
@@ -102,6 +103,7 @@ export class ReceiptGroupsRepository {
         status: header.status,
         reviewReasons: header.reviewReasons,
         merchantRaw: header.merchantRaw,
+        merchantRut: header.merchantRut,
         receiptDate: header.receiptDate,
         totalDeclared: header.totalDeclared,
         currency: header.currency,

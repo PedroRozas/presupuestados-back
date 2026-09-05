@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { ReceiptGroup, ReceiptItem } from '../../database/schema/index.js';
 import {
   LLM_NORMALIZATION_PROVIDER,
+  type LlmNormalizationInput,
   type LlmNormalizationProvider,
   type NormalizationCandidate,
   type NormalizationQuestion,
@@ -31,8 +32,6 @@ export type NormalizationOutcome =
       items: { matched: number; created: number; llmDecided: number };
     };
 
-type GroupWithOptionalRut = ReceiptGroup & { merchantRut?: string | null };
-
 interface PendingMerchant {
   question: NormalizationQuestion;
   canonicalRaw: string;
@@ -49,6 +48,11 @@ type MerchantNormalization =
   | { kind: 'resolved'; outcome: MerchantOutcome }
   | { kind: 'pending'; pending: PendingMerchant };
 
+type ItemNormalization =
+  | { kind: 'matched' }
+  | { kind: 'created' }
+  | { kind: 'pending'; pending: PendingItem };
+
 interface ItemsNormalization {
   matched: number;
   created: number;
@@ -60,6 +64,16 @@ interface ResolvedPending {
   itemsMatched: number;
   itemsCreated: number;
 }
+
+const buildQuestion = (
+  key: string,
+  description: string,
+  candidates: ScoredCandidate[],
+): NormalizationQuestion => ({
+  key,
+  description,
+  candidates: toNormalizationCandidates(candidates),
+});
 
 const toNormalizationCandidates = (
   candidates: ScoredCandidate[],
@@ -145,8 +159,9 @@ export class NormalizationService {
   private async normalizeMerchant(
     group: ReceiptGroup,
   ): Promise<MerchantNormalization> {
+    if (group.merchantId) return { kind: 'resolved', outcome: 'matched' };
     if (!group.merchantRaw) return { kind: 'resolved', outcome: 'none' };
-    const rut = (group as GroupWithOptionalRut).merchantRut ?? null;
+    const rut = group.merchantRut ?? null;
     if (rut) {
       const found = await this.merchants.findByRut(group.coupleId, rut);
       if (found) {
@@ -177,36 +192,54 @@ export class NormalizationService {
       low: this.config.matchLow,
     });
     if (decision.kind === 'match') {
-      const matchedCandidate = candidates.find((c) => c.id === decision.id);
-      await this.applyMerchantResolution(
+      return this.applyMerchantMatch(
         group,
         decision.id,
         canonicalRaw,
-        matchedCandidate?.canonicalName ?? canonicalRaw,
+        candidates,
       );
-      return { kind: 'resolved', outcome: 'matched' };
     }
     if (decision.kind === 'new') {
-      const created = await this.merchants.create(
-        group.coupleId,
-        canonicalRaw,
-        rut,
-      );
-      await this.groups.setMerchant(group.id, created.id);
-      return { kind: 'resolved', outcome: 'created' };
+      return this.createNewMerchant(group, canonicalRaw, rut);
     }
     return {
       kind: 'pending',
       pending: {
         canonicalRaw,
         rut,
-        question: {
-          key: 'merchant',
-          description: canonicalRaw,
-          candidates: toNormalizationCandidates(decision.candidates),
-        },
+        question: buildQuestion('merchant', canonicalRaw, decision.candidates),
       },
     };
+  }
+
+  private async applyMerchantMatch(
+    group: ReceiptGroup,
+    merchantId: string,
+    canonicalRaw: string,
+    candidates: ScoredCandidate[],
+  ): Promise<MerchantNormalization> {
+    const matchedCandidate = candidates.find((c) => c.id === merchantId);
+    await this.applyMerchantResolution(
+      group,
+      merchantId,
+      canonicalRaw,
+      matchedCandidate?.canonicalName ?? canonicalRaw,
+    );
+    return { kind: 'resolved', outcome: 'matched' };
+  }
+
+  private async createNewMerchant(
+    group: ReceiptGroup,
+    canonicalRaw: string,
+    rut: string | null,
+  ): Promise<MerchantNormalization> {
+    const created = await this.merchants.create(
+      group.coupleId,
+      canonicalRaw,
+      rut,
+    );
+    await this.groups.setMerchant(group.id, created.id);
+    return { kind: 'resolved', outcome: 'created' };
   }
 
   private async applyMerchantResolution(
@@ -241,11 +274,7 @@ export class NormalizationService {
   private async normalizeItem(
     group: ReceiptGroup,
     item: ReceiptItem,
-  ): Promise<
-    | { kind: 'matched' }
-    | { kind: 'created' }
-    | { kind: 'pending'; pending: PendingItem }
-  > {
+  ): Promise<ItemNormalization> {
     const canonicalRaw = toCanonicalName(item.descriptionRaw);
     const candidates = await this.products.findCandidates(
       group.coupleId,
@@ -257,36 +286,49 @@ export class NormalizationService {
       low: this.config.matchLow,
     });
     if (decision.kind === 'match') {
-      const matchedCandidate = candidates.find((c) => c.id === decision.id);
-      await this.applyProductResolution(
-        item.id,
-        decision.id,
-        canonicalRaw,
-        matchedCandidate?.canonicalName ?? canonicalRaw,
-      );
-      return { kind: 'matched' };
+      return this.applyItemMatch(item, decision.id, canonicalRaw, candidates);
     }
     if (decision.kind === 'new') {
-      const createdProduct = await this.products.create(
-        group.coupleId,
-        canonicalRaw,
-        item.category,
-      );
-      await this.items.setProduct(item.id, createdProduct.id);
-      return { kind: 'created' };
+      return this.createNewProduct(group, item, canonicalRaw);
     }
     return {
       kind: 'pending',
       pending: {
         item,
         canonicalRaw,
-        question: {
-          key: item.id,
-          description: canonicalRaw,
-          candidates: toNormalizationCandidates(decision.candidates),
-        },
+        question: buildQuestion(item.id, canonicalRaw, decision.candidates),
       },
     };
+  }
+
+  private async applyItemMatch(
+    item: ReceiptItem,
+    productId: string,
+    canonicalRaw: string,
+    candidates: ScoredCandidate[],
+  ): Promise<ItemNormalization> {
+    const matchedCandidate = candidates.find((c) => c.id === productId);
+    await this.applyProductResolution(
+      item.id,
+      productId,
+      canonicalRaw,
+      matchedCandidate?.canonicalName ?? canonicalRaw,
+    );
+    return { kind: 'matched' };
+  }
+
+  private async createNewProduct(
+    group: ReceiptGroup,
+    item: ReceiptItem,
+    canonicalRaw: string,
+  ): Promise<ItemNormalization> {
+    const created = await this.products.create(
+      group.coupleId,
+      canonicalRaw,
+      item.category,
+    );
+    await this.items.setProduct(item.id, created.id);
+    return { kind: 'created' };
   }
 
   private async applyProductResolution(
@@ -301,17 +343,10 @@ export class NormalizationService {
     }
   }
 
-  private async resolvePending(
-    group: ReceiptGroup,
-    merchantPending: PendingMerchant | undefined,
-    fallbackMerchantOutcome: MerchantOutcome,
-    itemPendings: PendingItem[],
-  ): Promise<ResolvedPending> {
-    const questions: NormalizationQuestion[] = [
-      ...(merchantPending ? [merchantPending.question] : []),
-      ...itemPendings.map((pending) => pending.question),
-    ];
-    const result = await this.provider.chooseCandidates({
+  private buildProviderInput(
+    questions: NormalizationQuestion[],
+  ): LlmNormalizationInput {
+    return {
       questions,
       systemPrompt: NORMALIZATION_PROMPT_V1.system,
       userPrompt: NORMALIZATION_PROMPT_V1.buildUser(questions),
@@ -319,20 +354,21 @@ export class NormalizationService {
       schemaName: NORMALIZATION_PROMPT_V1.schemaName,
       maxOutputTokens: this.config.normalizationMaxOutputTokens,
       timeoutMs: this.config.extractionTimeoutMs,
-    });
-    const parsed = parseNormalizationOutput(result.rawText);
-    const decisionsByKey = new Map(
+    };
+  }
+
+  private decisionsByKey(rawText: string): Map<string, string | null> {
+    const parsed = parseNormalizationOutput(rawText);
+    return new Map(
       parsed.decisions.map((decision) => [decision.key, decision.candidate_id]),
     );
+  }
 
-    const merchantOutcome = merchantPending
-      ? await this.resolveMerchantDecision(
-          group,
-          merchantPending,
-          decisionsByKey.get('merchant') ?? null,
-        )
-      : fallbackMerchantOutcome;
-
+  private async resolveItemDecisions(
+    group: ReceiptGroup,
+    itemPendings: PendingItem[],
+    decisionsByKey: Map<string, string | null>,
+  ): Promise<{ itemsMatched: number; itemsCreated: number }> {
     let itemsMatched = 0;
     let itemsCreated = 0;
     for (const pending of itemPendings) {
@@ -344,6 +380,37 @@ export class NormalizationService {
       if (matched) itemsMatched += 1;
       else itemsCreated += 1;
     }
+    return { itemsMatched, itemsCreated };
+  }
+
+  private async resolvePending(
+    group: ReceiptGroup,
+    merchantPending: PendingMerchant | undefined,
+    fallbackMerchantOutcome: MerchantOutcome,
+    itemPendings: PendingItem[],
+  ): Promise<ResolvedPending> {
+    const questions: NormalizationQuestion[] = [
+      ...(merchantPending ? [merchantPending.question] : []),
+      ...itemPendings.map((pending) => pending.question),
+    ];
+    const result = await this.provider.chooseCandidates(
+      this.buildProviderInput(questions),
+    );
+    const decisionsByKey = this.decisionsByKey(result.rawText);
+
+    const merchantOutcome = merchantPending
+      ? await this.resolveMerchantDecision(
+          group,
+          merchantPending,
+          decisionsByKey.get('merchant') ?? null,
+        )
+      : fallbackMerchantOutcome;
+
+    const { itemsMatched, itemsCreated } = await this.resolveItemDecisions(
+      group,
+      itemPendings,
+      decisionsByKey,
+    );
 
     return { merchantOutcome, itemsMatched, itemsCreated };
   }

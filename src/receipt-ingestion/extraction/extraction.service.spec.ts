@@ -30,7 +30,7 @@ const image = (pageIndex: number): ReceiptImage =>
 
 const modelOutput = {
   merchant_raw: 'JUMBO',
-  merchant_rut: null,
+  merchant_rut: '76.123.456-7',
   receipt_date: '2026-09-01',
   total: 3480,
   currency: 'CLP',
@@ -188,6 +188,7 @@ describe('ExtractionService.extractGroup', () => {
       status: 'ready',
       reviewReasons: [],
       merchantRaw: 'JUMBO',
+      merchantRut: '76.123.456-7',
       receiptDate: '2026-09-01',
       totalDeclared: '3480',
       currency: 'CLP',
