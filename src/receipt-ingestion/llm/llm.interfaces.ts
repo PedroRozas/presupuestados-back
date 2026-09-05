@@ -51,3 +51,40 @@ export const hasLlmUsage = (
     isFiniteNumber(candidate['latencyMs'])
   );
 };
+
+export const LLM_NORMALIZATION_PROVIDER = Symbol('LLM_NORMALIZATION_PROVIDER');
+
+export interface NormalizationCandidate {
+  id: string;
+  canonicalName: string;
+}
+
+export interface NormalizationQuestion {
+  key: string;
+  description: string;
+  candidates: NormalizationCandidate[];
+}
+
+export interface LlmNormalizationInput {
+  questions: NormalizationQuestion[];
+  systemPrompt: string;
+  userPrompt: string;
+  outputJsonSchema: Record<string, unknown>;
+  schemaName: string;
+  maxOutputTokens: number;
+  timeoutMs: number;
+}
+
+export interface LlmNormalizationResult {
+  rawText: string;
+  model: string;
+  tokensIn: number;
+  tokensOut: number;
+  latencyMs: number;
+}
+
+export interface LlmNormalizationProvider {
+  chooseCandidates(
+    input: LlmNormalizationInput,
+  ): Promise<LlmNormalizationResult>;
+}

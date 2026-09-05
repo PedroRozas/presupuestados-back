@@ -5,6 +5,7 @@ export const RECEIPT_JOB = {
   CLOSE_GROUP: 'close-group',
   NOTIFY_USER: 'notify-user',
   EXTRACT_GROUP: 'extract-group',
+  NORMALIZE_GROUP: 'normalize-group',
 } as const;
 
 export type ReceiptJobName = (typeof RECEIPT_JOB)[keyof typeof RECEIPT_JOB];
@@ -70,6 +71,10 @@ export const RECEIPT_DEFAULTS = {
   minConfidence: 0.85,
   totalToleranceClp: 50,
   monthlyExtractionCap: 300,
+  matchHigh: 0.6,
+  matchLow: 0.3,
+  candidateLimit: 5,
+  normalizationMaxOutputTokens: 600,
 } as const;
 
 export const RECEIPT_IMAGE_CONTENT_TYPE = 'image/webp';
@@ -111,3 +116,5 @@ export const RECEIPT_EXTRACTION_STATUS = {
 export const RECEIPT_PROMPT_VERSION_V1 = 'v1';
 
 export const RECEIPT_PERIOD_TIME_ZONE = 'America/Santiago';
+
+export const RECEIPT_NORMALIZATION_PROMPT_VERSION_V1 = 'norm-v1';

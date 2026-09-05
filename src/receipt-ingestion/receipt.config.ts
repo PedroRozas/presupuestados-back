@@ -178,6 +178,32 @@ export class ReceiptConfigService {
     );
   }
 
+  get normalizationModel(): string {
+    return this.configService.getOrThrow<string>('RECEIPT_NORMALIZATION_MODEL');
+  }
+
+  get normalizationMaxOutputTokens(): number {
+    return this.getNumber(
+      'RECEIPT_NORMALIZATION_MAX_OUTPUT_TOKENS',
+      RECEIPT_DEFAULTS.normalizationMaxOutputTokens,
+    );
+  }
+
+  get matchHigh(): number {
+    return this.getRatio('RECEIPT_MATCH_HIGH', RECEIPT_DEFAULTS.matchHigh);
+  }
+
+  get matchLow(): number {
+    return this.getRatio('RECEIPT_MATCH_LOW', RECEIPT_DEFAULTS.matchLow);
+  }
+
+  get candidateLimit(): number {
+    return this.getNumber(
+      'RECEIPT_CANDIDATE_LIMIT',
+      RECEIPT_DEFAULTS.candidateLimit,
+    );
+  }
+
   private getString(key: string, fallback: string): string {
     const value = this.configService.get<string>(key);
     return value && value.length > 0 ? value : fallback;
