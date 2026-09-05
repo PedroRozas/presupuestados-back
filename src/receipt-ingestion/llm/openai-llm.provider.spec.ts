@@ -25,6 +25,7 @@ const input: LlmExtractionInput = {
 const config = {
   openAiApiKey: 'k',
   extractionModel: 'test-model',
+  normalizationModel: 'small-model',
 } as ReceiptConfigService;
 
 const buildProvider = (response: OpenAiResponseLike) => {
@@ -110,5 +111,45 @@ describe('OpenAiLlmProvider', () => {
         model: 'm',
       }) as unknown,
     });
+  });
+
+  it('chooseCandidates usa el modelo pequeño con solo texto y json_schema estricto', async () => {
+    const { provider, create } = buildProvider({
+      output_text: '{"decisions":[]}',
+      status: 'completed',
+      usage: { input_tokens: 3, output_tokens: 1 },
+      model: 'small-model-2026',
+    });
+
+    const result = await provider.chooseCandidates({
+      questions: [],
+      systemPrompt: 'sys-n',
+      userPrompt: 'user-n',
+      outputJsonSchema: {
+        type: 'object',
+        properties: {},
+        required: [],
+        additionalProperties: false,
+      },
+      schemaName: 'receipt_normalization',
+      maxOutputTokens: 600,
+      timeoutMs: 1000,
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        rawText: '{"decisions":[]}',
+        model: 'small-model-2026',
+        tokensIn: 3,
+        tokensOut: 1,
+      }),
+    );
+    const [params] = create.mock.calls[0] as [Record<string, unknown>];
+    expect(params['model']).toBe('small-model');
+    expect(params['instructions']).toBe('sys-n');
+    expect(params['max_output_tokens']).toBe(600);
+    expect(params['input']).toEqual([
+      { role: 'user', content: [{ type: 'input_text', text: 'user-n' }] },
+    ]);
   });
 });

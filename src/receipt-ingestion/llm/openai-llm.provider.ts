@@ -7,6 +7,9 @@ import type {
   LlmExtractionProvider,
   LlmExtractionResult,
   LlmImageInput,
+  LlmNormalizationInput,
+  LlmNormalizationProvider,
+  LlmNormalizationResult,
 } from './llm.interfaces.js';
 import { readOpenAiUsage } from './openai-usage.js';
 
@@ -65,7 +68,9 @@ const toImageContent = (image: LlmImageInput) => ({
 });
 
 @Injectable()
-export class OpenAiLlmProvider implements LlmExtractionProvider {
+export class OpenAiLlmProvider
+  implements LlmExtractionProvider, LlmNormalizationProvider
+{
   private client: OpenAiClientLike | undefined;
 
   constructor(
@@ -85,14 +90,74 @@ export class OpenAiLlmProvider implements LlmExtractionProvider {
   }
 
   async extract(input: LlmExtractionInput): Promise<LlmExtractionResult> {
-    const startedAt = Date.now();
-    const response = await this.getClient().responses.create(
-      this.buildParams(input),
-      { timeout: input.timeoutMs },
+    const content = [
+      { type: 'input_text' as const, text: input.userPrompt },
+      ...input.images.map(toImageContent),
+    ];
+    const params = this.baseParams(
+      this.config.extractionModel,
+      input.systemPrompt,
+      content,
+      input.maxOutputTokens,
+      input.schemaName,
+      input.outputJsonSchema,
     );
+    return this.call(params, input.timeoutMs, this.config.extractionModel);
+  }
+
+  async chooseCandidates(
+    input: LlmNormalizationInput,
+  ): Promise<LlmNormalizationResult> {
+    const content = [{ type: 'input_text' as const, text: input.userPrompt }];
+    const params = this.baseParams(
+      this.config.normalizationModel,
+      input.systemPrompt,
+      content,
+      input.maxOutputTokens,
+      input.schemaName,
+      input.outputJsonSchema,
+    );
+    return this.call(params, input.timeoutMs, this.config.normalizationModel);
+  }
+
+  private baseParams(
+    model: string,
+    systemPrompt: string,
+    content: unknown[],
+    maxOutputTokens: number,
+    schemaName: string,
+    schema: Record<string, unknown>,
+  ): Record<string, unknown> {
+    return {
+      model,
+      instructions: systemPrompt,
+      input: [{ role: 'user', content }],
+      max_output_tokens: maxOutputTokens,
+      temperature: TEMPERATURE,
+      store: false,
+      text: {
+        format: {
+          type: 'json_schema',
+          name: schemaName,
+          strict: true,
+          schema,
+        },
+      },
+    };
+  }
+
+  private async call(
+    params: Record<string, unknown>,
+    timeoutMs: number,
+    fallbackModel: string,
+  ): Promise<LlmExtractionResult> {
+    const startedAt = Date.now();
+    const response = await this.getClient().responses.create(params, {
+      timeout: timeoutMs,
+    });
     const latencyMs = Date.now() - startedAt;
     const usage = readOpenAiUsage(response.usage);
-    const model = response.model ?? this.config.extractionModel;
+    const model = response.model ?? fallbackModel;
     const callUsage: LlmCallUsage = {
       model,
       tokensIn: usage.tokensIn,
@@ -116,33 +181,6 @@ export class OpenAiLlmProvider implements LlmExtractionProvider {
       tokensIn: usage.tokensIn,
       tokensOut: usage.tokensOut,
       latencyMs,
-    };
-  }
-
-  private buildParams(input: LlmExtractionInput): Record<string, unknown> {
-    return {
-      model: this.config.extractionModel,
-      instructions: input.systemPrompt,
-      input: [
-        {
-          role: 'user',
-          content: [
-            { type: 'input_text', text: input.userPrompt },
-            ...input.images.map(toImageContent),
-          ],
-        },
-      ],
-      max_output_tokens: input.maxOutputTokens,
-      temperature: TEMPERATURE,
-      store: false,
-      text: {
-        format: {
-          type: 'json_schema',
-          name: input.schemaName,
-          strict: true,
-          schema: input.outputJsonSchema,
-        },
-      },
     };
   }
 }
