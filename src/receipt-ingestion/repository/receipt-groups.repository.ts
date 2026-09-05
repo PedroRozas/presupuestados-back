@@ -8,7 +8,6 @@ import type {
   NewReceiptGroup,
   ReceiptGroup,
 } from '../../database/schema/index.js';
-import { RECEIPT_REVIEW_REASON_EXTRACTION_PENDING } from '../receipt.constants.js';
 import type { ReceiptSourceKind } from '../receipt.constants.js';
 
 export class ReceiptGroupInsertError extends Error {
@@ -74,27 +73,6 @@ export class ReceiptGroupsRepository {
       .where(eq(receiptGroups.id, groupId))
       .limit(1);
     return rows[0];
-  }
-
-  async closeAsPendingExtraction(
-    groupId: string,
-    closedAt: Date,
-  ): Promise<boolean> {
-    const rows = await this.db
-      .update(receiptGroups)
-      .set({
-        status: 'needs_review',
-        reviewReasons: [RECEIPT_REVIEW_REASON_EXTRACTION_PENDING],
-        closedAt,
-      })
-      .where(
-        and(
-          eq(receiptGroups.id, groupId),
-          eq(receiptGroups.status, 'collecting'),
-        ),
-      )
-      .returning({ id: receiptGroups.id });
-    return rows.length > 0;
   }
 
   async markExtracting(groupId: string, closedAt: Date): Promise<boolean> {

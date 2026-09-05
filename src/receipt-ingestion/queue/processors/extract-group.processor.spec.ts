@@ -1,0 +1,96 @@
+import { ExtractGroupProcessor } from './extract-group.processor.js';
+import type { ExtractionService } from '../../extraction/extraction.service.js';
+import type { ReceiptQueueService } from '../receipt-queue.service.js';
+import type { ReceiptGroupsRepository } from '../../repository/receipt-groups.repository.js';
+
+const payload = {
+  groupId: 'g1',
+  coupleId: 'c1',
+  senderPhoneE164: '+56912345678',
+};
+const summary = {
+  merchantRaw: 'JUMBO',
+  receiptDate: '2026-09-01',
+  total: 3480,
+  itemCount: 2,
+};
+
+const build = (outcome: unknown) => {
+  const extraction = { extractGroup: jest.fn(() => Promise.resolve(outcome)) };
+  const queue = { enqueueNotifyUser: jest.fn(() => Promise.resolve()) };
+  const groups = { markFailed: jest.fn(() => Promise.resolve()) };
+  const processor = new ExtractGroupProcessor(
+    extraction as unknown as ExtractionService,
+    queue as unknown as ReceiptQueueService,
+    groups as unknown as ReceiptGroupsRepository,
+  );
+  return { processor, extraction, queue, groups };
+};
+
+describe('ExtractGroupProcessor', () => {
+  it('avisa "boleta lista" cuando la extracción queda ready', async () => {
+    const { processor, extraction, queue } = build({
+      outcome: 'extracted',
+      status: 'ready',
+      reasons: [],
+      summary,
+    });
+    await processor.process(payload, 1);
+    expect(extraction.extractGroup).toHaveBeenCalledWith({
+      groupId: 'g1',
+      coupleId: 'c1',
+      attempt: 1,
+    });
+    expect(queue.enqueueNotifyUser).toHaveBeenCalledWith({
+      toPhoneE164: '+56912345678',
+      body: 'Boleta lista: JUMBO, 01-09-2026, total $3.480, 2 ítems.',
+    });
+  });
+
+  it('avisa revisión con motivos cuando queda needs_review', async () => {
+    const { processor, queue } = build({
+      outcome: 'extracted',
+      status: 'needs_review',
+      reasons: ['handwritten'],
+      summary,
+    });
+    await processor.process(payload, 2);
+    expect(queue.enqueueNotifyUser).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.stringContaining(
+          'necesita revisión (boleta manuscrita)',
+        ) as string,
+      }),
+    );
+  });
+
+  it('avisa el tope mensual', async () => {
+    const { processor, queue } = build({ outcome: 'monthly_cap' });
+    await processor.process(payload, 1);
+    expect(queue.enqueueNotifyUser).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.stringContaining('tope mensual') as string,
+      }),
+    );
+  });
+
+  it('no avisa cuando la extracción se omite', async () => {
+    const { processor, queue } = build({
+      outcome: 'skipped',
+      reason: 'not_extracting',
+    });
+    await processor.process(payload, 1);
+    expect(queue.enqueueNotifyUser).not.toHaveBeenCalled();
+  });
+
+  it('al agotar reintentos marca failed y avisa', async () => {
+    const { processor, groups, queue } = build({});
+    await processor.onExhausted(payload);
+    expect(groups.markFailed).toHaveBeenCalledWith('g1', ['extraction_failed']);
+    expect(queue.enqueueNotifyUser).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: expect.stringContaining('No pude leer la boleta') as string,
+      }),
+    );
+  });
+});

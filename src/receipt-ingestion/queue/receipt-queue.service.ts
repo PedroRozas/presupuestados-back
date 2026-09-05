@@ -12,6 +12,7 @@ import {
 } from '../receipt.constants.js';
 import type {
   CloseGroupJobPayload,
+  ExtractGroupJobPayload,
   IngestImageJobPayload,
   NotifyUserJobPayload,
 } from './receipt-queue.constants.js';
@@ -85,6 +86,11 @@ export class ReceiptQueueService implements OnModuleDestroy {
   async enqueueNotifyUser(payload: NotifyUserJobPayload): Promise<void> {
     await this.getQueue().add(RECEIPT_JOB.NOTIFY_USER, payload);
     this.logger.log(`job_enqueued name=${RECEIPT_JOB.NOTIFY_USER}`);
+  }
+
+  async enqueueExtractGroup(payload: ExtractGroupJobPayload): Promise<void> {
+    await this.getQueue().add(RECEIPT_JOB.EXTRACT_GROUP, payload);
+    this.logger.log(`job_enqueued name=${RECEIPT_JOB.EXTRACT_GROUP}`);
   }
 
   async onModuleDestroy(): Promise<void> {

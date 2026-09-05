@@ -87,6 +87,9 @@ export class ExtractionService {
   async extractGroup(input: ExtractGroupInput): Promise<ExtractionOutcome> {
     const group = await this.groups.findById(input.groupId);
     if (!group) return { outcome: 'skipped', reason: 'not_found' };
+    if (group.coupleId !== input.coupleId) {
+      return { outcome: 'skipped', reason: 'not_found' };
+    }
     if (group.status !== 'extracting') {
       return { outcome: 'skipped', reason: 'not_extracting' };
     }

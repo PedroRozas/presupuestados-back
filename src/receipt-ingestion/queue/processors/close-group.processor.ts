@@ -4,10 +4,7 @@ import { decideCloseAction } from '../../groups/close-group-decision.js';
 import { ReceiptConfigService } from '../../receipt.config.js';
 import { ReceiptGroupsRepository } from '../../repository/receipt-groups.repository.js';
 import { ReceiptImagesRepository } from '../../repository/receipt-images.repository.js';
-import {
-  buildGroupClosedMessage,
-  buildNoOpenGroupMessage,
-} from '../../whatsapp/receipt-notifications.js';
+import { buildNoOpenGroupMessage } from '../../whatsapp/receipt-notifications.js';
 import { ReceiptQueueService } from '../receipt-queue.service.js';
 import type {
   CloseGroupByCommandPayload,
@@ -66,7 +63,7 @@ export class CloseGroupProcessor {
     if (decision.action === 'reschedule') {
       return this.reschedule(payload, decision.delayMs);
     }
-    return this.close(group, lastPageIndex);
+    return this.close(group);
   }
 
   private async reschedule(
@@ -110,22 +107,17 @@ export class CloseGroupProcessor {
     });
   }
 
-  private async close(
-    group: ReceiptGroup,
-    lastPageIndex: number,
-  ): Promise<CloseGroupResult> {
-    const closed = await this.groups.closeAsPendingExtraction(
-      group.id,
-      this.now(),
-    );
-    if (!closed) {
+  private async close(group: ReceiptGroup): Promise<CloseGroupResult> {
+    const transitioned = await this.groups.markExtracting(group.id, this.now());
+    if (!transitioned) {
       return { outcome: 'skipped', reason: 'not_collecting' };
     }
-    await this.queue.enqueueNotifyUser({
-      toPhoneE164: group.senderPhoneE164,
-      body: buildGroupClosedMessage({ pageCount: lastPageIndex }),
+    await this.queue.enqueueExtractGroup({
+      groupId: group.id,
+      coupleId: group.coupleId,
+      senderPhoneE164: group.senderPhoneE164,
     });
-    this.logger.log(`group_closed group=${group.id} pages=${lastPageIndex}`);
+    this.logger.log(`group_closed group=${group.id}`);
     return { outcome: 'closed', groupId: group.id };
   }
 }

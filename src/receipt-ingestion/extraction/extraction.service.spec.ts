@@ -239,6 +239,18 @@ describe('ExtractionService.extractGroup', () => {
     ).resolves.toEqual({ outcome: 'skipped', reason: 'not_extracting' });
   });
 
+  it('omite grupos de otra pareja como not_found sin llamar al modelo', async () => {
+    const { service, provider } = build({
+      group: group({ coupleId: 'other' }),
+    });
+
+    await expect(service.extractGroup(input)).resolves.toEqual({
+      outcome: 'skipped',
+      reason: 'not_found',
+    });
+    expect(provider.extract).not.toHaveBeenCalled();
+  });
+
   it('marca failed sin llamar al modelo si el grupo no tiene imágenes', async () => {
     const { service, groups, provider } = build({ group: group(), images: [] });
 

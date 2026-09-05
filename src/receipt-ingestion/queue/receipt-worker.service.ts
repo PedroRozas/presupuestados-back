@@ -11,12 +11,14 @@ import { RECEIPT_JOB, RECEIPT_QUEUE_NAME } from '../receipt.constants.js';
 import { createReceiptRedisConnection } from './receipt-queue.service.js';
 import type {
   CloseGroupJobPayload,
+  ExtractGroupJobPayload,
   IngestImageJobPayload,
   NotifyUserJobPayload,
 } from './receipt-queue.constants.js';
 import { IngestImageProcessor } from './processors/ingest-image.processor.js';
 import { CloseGroupProcessor } from './processors/close-group.processor.js';
 import { NotifyUserProcessor } from './processors/notify-user.processor.js';
+import { ExtractGroupProcessor } from './processors/extract-group.processor.js';
 
 export class UnknownReceiptJobError extends Error {
   constructor(name: string) {
@@ -36,6 +38,7 @@ export class ReceiptWorkerService implements OnModuleInit, OnModuleDestroy {
     private readonly ingestImage: IngestImageProcessor,
     private readonly closeGroup: CloseGroupProcessor,
     private readonly notifyUser: NotifyUserProcessor,
+    private readonly extractGroup: ExtractGroupProcessor,
   ) {}
 
   onModuleInit(): void {
@@ -55,17 +58,41 @@ export class ReceiptWorkerService implements OnModuleInit, OnModuleDestroy {
       connection: this.connection,
       concurrency: this.config.workerConcurrency,
     });
-    this.worker.on('failed', (job, error) => {
-      this.logger.error(
-        `job_failed name=${job?.name ?? 'unknown'} attempt=${job?.attemptsMade ?? 0} error=${error.message}`,
-      );
-    });
+    this.registerFailureHandler(this.worker);
     this.logger.log('receipt_worker_started');
   }
 
   async onModuleDestroy(): Promise<void> {
     await this.worker?.close();
     await this.connection?.quit();
+  }
+
+  private registerFailureHandler(worker: Worker): void {
+    worker.on('failed', (job, error) => {
+      this.logger.error(
+        `job_failed name=${job?.name ?? 'unknown'} attempt=${job?.attemptsMade ?? 0} error=${error.message}`,
+      );
+      if (job && this.isExhaustedExtraction(job)) {
+        void this.extractGroup
+          .onExhausted(job.data as ExtractGroupJobPayload)
+          .catch((exhaustError: unknown) => {
+            const message =
+              exhaustError instanceof Error
+                ? exhaustError.message
+                : String(exhaustError);
+            this.logger.error(
+              `extraction_exhausted_handler_failed error=${message}`,
+            );
+          });
+      }
+    });
+  }
+
+  private isExhaustedExtraction(job: Job): boolean {
+    const maxAttempts = job.opts.attempts ?? 1;
+    return (
+      job.name === RECEIPT_JOB.EXTRACT_GROUP && job.attemptsMade >= maxAttempts
+    );
   }
 
   private async handle(job: Job): Promise<unknown> {
@@ -76,6 +103,11 @@ export class ReceiptWorkerService implements OnModuleInit, OnModuleDestroy {
         return this.closeGroup.process(job.data as CloseGroupJobPayload);
       case RECEIPT_JOB.NOTIFY_USER:
         return this.notifyUser.process(job.data as NotifyUserJobPayload);
+      case RECEIPT_JOB.EXTRACT_GROUP:
+        return this.extractGroup.process(
+          job.data as ExtractGroupJobPayload,
+          job.attemptsMade + 1,
+        );
       default:
         throw new UnknownReceiptJobError(job.name);
     }

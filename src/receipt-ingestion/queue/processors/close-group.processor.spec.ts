@@ -28,7 +28,7 @@ const build = (options: {
   const groups = {
     findById: jest.fn(() => Promise.resolve(options.byId)),
     findOpenBySender: jest.fn(() => Promise.resolve(options.open)),
-    closeAsPendingExtraction: jest.fn(() =>
+    markExtracting: jest.fn(() =>
       Promise.resolve(options.closeSucceeds ?? true),
     ),
   };
@@ -38,6 +38,7 @@ const build = (options: {
   const queue = {
     enqueueCloseGroup: jest.fn(() => Promise.resolve()),
     enqueueNotifyUser: jest.fn(() => Promise.resolve()),
+    enqueueExtractGroup: jest.fn(() => Promise.resolve()),
   };
   const config = { groupWindowSeconds: 90 } as ReceiptConfigService;
   const processor = new CloseGroupProcessor(
@@ -51,7 +52,7 @@ const build = (options: {
 };
 
 describe('CloseGroupProcessor', () => {
-  it('cierra por ventana expirada y encola el aviso con el total de páginas', async () => {
+  it('cierra por ventana expirada y encola la extracción', async () => {
     const { processor, groups, queue } = build({
       byId: group({}),
       nextPageIndex: 3,
@@ -64,14 +65,13 @@ describe('CloseGroupProcessor', () => {
     });
 
     expect(result).toEqual({ outcome: 'closed', groupId: 'group-1' });
-    expect(groups.closeAsPendingExtraction).toHaveBeenCalledWith(
-      'group-1',
-      NOW,
-    );
-    expect(queue.enqueueNotifyUser).toHaveBeenCalledWith({
-      toPhoneE164: '+56912345678',
-      body: 'Recibí tu boleta (2 fotos). Quedó guardada y pendiente de revisión.',
+    expect(groups.markExtracting).toHaveBeenCalledWith('group-1', NOW);
+    expect(queue.enqueueExtractGroup).toHaveBeenCalledWith({
+      groupId: 'group-1',
+      coupleId: 'couple-1',
+      senderPhoneE164: '+56912345678',
     });
+    expect(queue.enqueueNotifyUser).not.toHaveBeenCalled();
   });
 
   it('reprograma si la ventana sigue abierta', async () => {
@@ -91,7 +91,7 @@ describe('CloseGroupProcessor', () => {
       { kind: 'window', groupId: 'group-1', pageIndex: 2, reschedule: 1 },
       60 * 1000,
     );
-    expect(groups.closeAsPendingExtraction).not.toHaveBeenCalled();
+    expect(groups.markExtracting).not.toHaveBeenCalled();
   });
 
   it('omite un job superado por una página posterior', async () => {
@@ -104,7 +104,7 @@ describe('CloseGroupProcessor', () => {
     });
 
     expect(result).toEqual({ outcome: 'skipped', reason: 'superseded' });
-    expect(groups.closeAsPendingExtraction).not.toHaveBeenCalled();
+    expect(groups.markExtracting).not.toHaveBeenCalled();
   });
 
   it('omite si el grupo ya no existe o ya no está en collecting', async () => {
@@ -144,14 +144,17 @@ describe('CloseGroupProcessor', () => {
       '+56912345678',
       'couple-1',
     );
-    expect(queue.enqueueNotifyUser).toHaveBeenCalledWith({
-      toPhoneE164: '+56912345678',
-      body: 'Recibí tu boleta (1 foto). Quedó guardada y pendiente de revisión.',
+    expect(groups.markExtracting).toHaveBeenCalledWith('group-1', NOW);
+    expect(queue.enqueueExtractGroup).toHaveBeenCalledWith({
+      groupId: 'group-1',
+      coupleId: 'couple-1',
+      senderPhoneE164: '+56912345678',
     });
+    expect(queue.enqueueNotifyUser).not.toHaveBeenCalled();
   });
 
-  it('omite y no notifica si otro proceso ya cerró el grupo primero', async () => {
-    const { processor, queue } = build({
+  it('omite y no notifica ni encola extracción si otro proceso ya cerró el grupo primero', async () => {
+    const { processor, queue, groups } = build({
       byId: group({}),
       nextPageIndex: 3,
       closeSucceeds: false,
@@ -164,6 +167,8 @@ describe('CloseGroupProcessor', () => {
     });
 
     expect(result).toEqual({ outcome: 'skipped', reason: 'not_collecting' });
+    expect(groups.markExtracting).toHaveBeenCalledWith('group-1', NOW);
+    expect(queue.enqueueExtractGroup).not.toHaveBeenCalled();
     expect(queue.enqueueNotifyUser).not.toHaveBeenCalled();
   });
 
