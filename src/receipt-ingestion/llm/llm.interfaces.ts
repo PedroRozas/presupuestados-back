@@ -88,3 +88,43 @@ export interface LlmNormalizationProvider {
     input: LlmNormalizationInput,
   ): Promise<LlmNormalizationResult>;
 }
+
+export const LLM_QUERY_PROVIDER = Symbol('LLM_QUERY_PROVIDER');
+
+export interface LlmToolDefinition {
+  name: string;
+  description: string;
+  parametersJsonSchema: Record<string, unknown>;
+}
+
+export interface LlmToolCall {
+  callId: string;
+  name: string;
+  argumentsJson: string;
+}
+
+export type LlmToolExecutor = (call: LlmToolCall) => Promise<unknown>;
+
+export interface LlmQueryInput {
+  systemPrompt: string;
+  userMessage: string;
+  tools: LlmToolDefinition[];
+  executeTool: LlmToolExecutor;
+  maxToolRounds: number;
+  maxOutputTokens: number;
+  timeoutMs: number;
+}
+
+export interface LlmQueryResult {
+  text: string;
+  toolCallCount: number;
+  model: string;
+  tokensIn: number;
+  tokensOut: number;
+  latencyMs: number;
+  exhausted: boolean;
+}
+
+export interface LlmQueryProvider {
+  answerWithTools(input: LlmQueryInput): Promise<LlmQueryResult>;
+}

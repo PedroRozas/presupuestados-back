@@ -247,6 +247,52 @@ export class ReceiptConfigService {
     );
   }
 
+  get queryModel(): string {
+    return this.configService.getOrThrow<string>('RECEIPT_QUERY_MODEL');
+  }
+
+  get queryMaxOutputTokens(): number {
+    return this.getNumber(
+      'RECEIPT_QUERY_MAX_OUTPUT_TOKENS',
+      RECEIPT_DEFAULTS.queryMaxOutputTokens,
+    );
+  }
+
+  get queryMaxToolRounds(): number {
+    return this.getNumber(
+      'RECEIPT_QUERY_MAX_TOOL_ROUNDS',
+      RECEIPT_DEFAULTS.queryMaxToolRounds,
+    );
+  }
+
+  get queryTimeoutMs(): number {
+    return this.getNumber(
+      'RECEIPT_QUERY_TIMEOUT_MS',
+      RECEIPT_DEFAULTS.queryTimeoutMs,
+    );
+  }
+
+  get queryRateLimitWindowSeconds(): number {
+    return this.getNumber(
+      'RECEIPT_QUERY_RATE_LIMIT_WINDOW_SECONDS',
+      RECEIPT_DEFAULTS.queryRateLimitWindowSeconds,
+    );
+  }
+
+  get queryRateLimitMax(): number {
+    return this.getNumber(
+      'RECEIPT_QUERY_RATE_LIMIT_MAX',
+      RECEIPT_DEFAULTS.queryRateLimitMax,
+    );
+  }
+
+  get queryMaxMessageChars(): number {
+    return this.getNumber(
+      'RECEIPT_QUERY_MAX_MESSAGE_CHARS',
+      RECEIPT_DEFAULTS.queryMaxMessageChars,
+    );
+  }
+
   private getString(key: string, fallback: string): string {
     const value = this.configService.get<string>(key);
     return value && value.length > 0 ? value : fallback;

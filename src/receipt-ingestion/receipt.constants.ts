@@ -7,6 +7,7 @@ export const RECEIPT_JOB = {
   EXTRACT_GROUP: 'extract-group',
   NORMALIZE_GROUP: 'normalize-group',
   SWEEP_STALE_GROUPS: 'sweep-stale-groups',
+  ANSWER_QUERY: 'answer-query',
 } as const;
 
 export type ReceiptJobName = (typeof RECEIPT_JOB)[keyof typeof RECEIPT_JOB];
@@ -81,6 +82,14 @@ export const RECEIPT_DEFAULTS = {
   extractionTemperature: 0,
   sweepIntervalMinutes: 10,
   staleExtractingMinutes: 30,
+  queryMaxOutputTokens: 800,
+  queryMaxToolRounds: 3,
+  queryRateLimitWindowSeconds: 60,
+  queryRateLimitMax: 10,
+  queryMaxMessageChars: 500,
+  queryTopProductsLimit: 10,
+  querySearchLimit: 20,
+  queryTimeoutMs: 30000,
 } as const;
 
 export const RECEIPT_IMAGE_CONTENT_TYPE = 'image/webp';
@@ -125,6 +134,9 @@ export const RECEIPT_PERIOD_TIME_ZONE = 'America/Santiago';
 
 export const RECEIPT_NORMALIZATION_PROMPT_PREFIX = 'norm-';
 export const RECEIPT_NORMALIZATION_PROMPT_VERSION_V1 = `${RECEIPT_NORMALIZATION_PROMPT_PREFIX}v1`;
+
+export const RECEIPT_QUERY_PROMPT_VERSION_V1 = 'query-v1';
+export const RECEIPT_QUERY_RATE_LIMIT_KEY_PREFIX = 'rl:receipts:query';
 
 export const MERCHANT_DECISION_KEY = 'merchant';
 

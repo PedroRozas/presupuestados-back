@@ -41,9 +41,16 @@ export interface NormalizeGroupJobPayload {
   coupleId: string;
 }
 
+export interface AnswerQueryJobPayload {
+  senderPhoneE164: string;
+  coupleId: string;
+  message: string;
+}
+
 export type ReceiptJobPayload =
   | IngestImageJobPayload
   | CloseGroupJobPayload
   | NotifyUserJobPayload
   | ExtractGroupJobPayload
-  | NormalizeGroupJobPayload;
+  | NormalizeGroupJobPayload
+  | AnswerQueryJobPayload;
