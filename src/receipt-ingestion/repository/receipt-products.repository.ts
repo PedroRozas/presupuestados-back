@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { DRIZZLE } from '../../database/database.module.js';
 import * as schema from '../../database/schema/index.js';
@@ -54,6 +54,22 @@ export class ReceiptProductsRepository {
       if (!isUniqueViolation(error)) throw error;
     }
     return this.findByName(coupleId, canonicalName);
+  }
+
+  async listByIds(
+    coupleId: string,
+    productIds: string[],
+  ): Promise<ReceiptProduct[]> {
+    if (productIds.length === 0) return [];
+    return this.db
+      .select()
+      .from(receiptProducts)
+      .where(
+        and(
+          eq(receiptProducts.coupleId, coupleId),
+          inArray(receiptProducts.id, productIds),
+        ),
+      );
   }
 
   async addAlias(productId: string, alias: string): Promise<void> {

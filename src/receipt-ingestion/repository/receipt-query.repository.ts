@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { sql } from 'drizzle-orm';
+import { sql, type SQL } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { DRIZZLE } from '../../database/database.module.js';
 import * as schema from '../../database/schema/index.js';
@@ -224,11 +224,15 @@ export class ReceiptQueryRepository {
     coupleId: string,
     months: number,
   ): Promise<ComparisonMonthRow[]> {
-    const totalsResult = await this.db.execute(sql`
-      select
-        extract(year from month_start)::int as year,
-        extract(month from month_start)::int as month,
-        coalesce(sum(i.amount), 0) as total
+    const [totals, categories] = await Promise.all([
+      this.comparisonTotals(coupleId, months),
+      this.comparisonCategories(coupleId, months),
+    ]);
+    return buildComparisonRows(totals, categories);
+  }
+
+  private monthSeriesJoin(coupleId: string, months: number): SQL {
+    return sql`
       from generate_series(
         date_trunc('month', now() at time zone ${RECEIPT_PERIOD_TIME_ZONE}) - (${months}::int - 1) * interval '1 month',
         date_trunc('month', now() at time zone ${RECEIPT_PERIOD_TIME_ZONE}),
@@ -239,35 +243,42 @@ export class ReceiptQueryRepository {
         and g.status = 'ready'
         and g.receipt_date >= month_start
         and g.receipt_date < month_start + interval '1 month'
+    `;
+  }
+
+  private async comparisonTotals(
+    coupleId: string,
+    months: number,
+  ): Promise<ComparisonTotalSqlRow[]> {
+    const result = await this.db.execute(sql`
+      select
+        extract(year from month_start)::int as year,
+        extract(month from month_start)::int as month,
+        coalesce(sum(i.amount), 0) as total
+      ${this.monthSeriesJoin(coupleId, months)}
       left join receipt_items i on i.group_id = g.id
       group by month_start
       order by month_start
     `);
-    const categoriesResult = await this.db.execute(sql`
+    return (result as unknown as { rows: ComparisonTotalSqlRow[] }).rows;
+  }
+
+  private async comparisonCategories(
+    coupleId: string,
+    months: number,
+  ): Promise<ComparisonCategorySqlRow[]> {
+    const result = await this.db.execute(sql`
       select
         extract(year from month_start)::int as year,
         extract(month from month_start)::int as month,
         i.category,
         sum(i.amount) as amount,
         count(*)::int as item_count
-      from generate_series(
-        date_trunc('month', now() at time zone ${RECEIPT_PERIOD_TIME_ZONE}) - (${months}::int - 1) * interval '1 month',
-        date_trunc('month', now() at time zone ${RECEIPT_PERIOD_TIME_ZONE}),
-        interval '1 month'
-      ) as month_start
-      left join receipt_groups g
-        on g.couple_id = ${coupleId}
-        and g.status = 'ready'
-        and g.receipt_date >= month_start
-        and g.receipt_date < month_start + interval '1 month'
+      ${this.monthSeriesJoin(coupleId, months)}
       join receipt_items i on i.group_id = g.id
       group by month_start, i.category
       order by month_start, i.category
     `);
-    return buildComparisonRows(
-      (totalsResult as unknown as { rows: ComparisonTotalSqlRow[] }).rows,
-      (categoriesResult as unknown as { rows: ComparisonCategorySqlRow[] })
-        .rows,
-    );
+    return (result as unknown as { rows: ComparisonCategorySqlRow[] }).rows;
   }
 }

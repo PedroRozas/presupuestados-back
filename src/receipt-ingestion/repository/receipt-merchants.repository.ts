@@ -33,6 +33,15 @@ export class ReceiptMerchantsRepository {
     return rows[0];
   }
 
+  async findById(merchantId: string): Promise<ReceiptMerchant | undefined> {
+    const rows = await this.db
+      .select()
+      .from(receiptMerchants)
+      .where(eq(receiptMerchants.id, merchantId))
+      .limit(1);
+    return rows[0];
+  }
+
   async findCandidates(
     coupleId: string,
     text: string,
