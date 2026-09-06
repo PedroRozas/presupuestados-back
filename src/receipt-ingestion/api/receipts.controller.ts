@@ -20,6 +20,7 @@ import {
 import { CoupleContextService } from '../../common/services/couple-context.service.js';
 import { ComparisonQueryDto } from './dto/comparison-query.dto.js';
 import { MonthQueryDto } from './dto/month-query.dto.js';
+import { QueryDto } from './dto/query.dto.js';
 import { ReplaceItemsDto } from './dto/replace-items.dto.js';
 import { UpdateGroupDto } from './dto/update-group.dto.js';
 import type {
@@ -30,6 +31,7 @@ import type {
   ReceiptsSummaryDto,
 } from './receipts.mappers.js';
 import { ReceiptsService } from './receipts.service.js';
+import { ReceiptQueryService } from '../query/receipt-query.service.js';
 
 type AuthenticatedRequest = Request & { user: AuthenticatedUser };
 
@@ -40,6 +42,7 @@ const HTTP_OK = 200;
 export class ReceiptsController {
   constructor(
     private readonly receipts: ReceiptsService,
+    private readonly queries: ReceiptQueryService,
     private readonly coupleContext: CoupleContextService,
   ) {}
 
@@ -112,6 +115,20 @@ export class ReceiptsController {
   ): Promise<{ enqueued: true }> {
     const coupleId = await this.coupleId(req);
     return this.receipts.requestNormalization(coupleId, id);
+  }
+
+  @Post('query')
+  @HttpCode(HTTP_OK)
+  async query(
+    @Body() dto: QueryDto,
+    @Req() req: AuthenticatedRequest,
+  ): Promise<{ answer: string }> {
+    const coupleId = await this.coupleId(req);
+    const answer = await this.queries.answer({
+      coupleId,
+      message: dto.message,
+    });
+    return { answer };
   }
 
   private coupleId(req: AuthenticatedRequest): Promise<string> {
