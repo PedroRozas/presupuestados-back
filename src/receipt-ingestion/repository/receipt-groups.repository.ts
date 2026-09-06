@@ -31,6 +31,12 @@ export interface ExtractionHeader {
   sourceKind: ReceiptSourceKind;
 }
 
+export interface ReceiptGroupHeaderPatch {
+  receiptDate?: string | null;
+  merchantRaw?: string | null;
+  totalDeclared?: string | null;
+}
+
 @Injectable()
 export class ReceiptGroupsRepository {
   constructor(
@@ -77,6 +83,45 @@ export class ReceiptGroupsRepository {
       .where(eq(receiptGroups.id, groupId))
       .limit(1);
     return rows[0];
+  }
+
+  async findByIdForCouple(
+    groupId: string,
+    coupleId: string,
+  ): Promise<ReceiptGroup | undefined> {
+    const rows = await this.db
+      .select()
+      .from(receiptGroups)
+      .where(
+        and(
+          eq(receiptGroups.id, groupId),
+          eq(receiptGroups.coupleId, coupleId),
+        ),
+      )
+      .limit(1);
+    return rows[0];
+  }
+
+  async updateHeader(
+    groupId: string,
+    patch: ReceiptGroupHeaderPatch,
+  ): Promise<void> {
+    if (Object.keys(patch).length === 0) return;
+    await this.db
+      .update(receiptGroups)
+      .set(patch)
+      .where(eq(receiptGroups.id, groupId));
+  }
+
+  async setStatusAndReasons(
+    groupId: string,
+    status: 'ready' | 'needs_review' | 'discarded',
+    reasons: ReceiptReviewReason[],
+  ): Promise<void> {
+    await this.db
+      .update(receiptGroups)
+      .set({ status, reviewReasons: reasons })
+      .where(eq(receiptGroups.id, groupId));
   }
 
   async markExtracting(groupId: string, closedAt: Date): Promise<boolean> {
