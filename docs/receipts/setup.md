@@ -131,3 +131,49 @@ Todas las rutas requieren `Authorization: Bearer <token>` (mismo `AuthGuard` que
 Los montos viajan como strings (Postgres `numeric`); la web los convierte a número en su mapper.
 
 Prueba manual: obtener un token con `POST /auth/login` y luego `curl -H "Authorization: Bearer <token>" http://localhost:3000/receipts/access` → `{"enabled":true}` para un usuario de la allowlist. Sin token la API responde `401`.
+
+## 9. Consultas por chat (tool calling)
+
+Preguntas en lenguaje natural sobre las boletas de la pareja, por dos canales:
+
+- **WhatsApp:** cualquier texto de un remitente de la allowlist que no sea `listo` encola `answer-query`; la respuesta llega como mensaje de texto (`notify-user`).
+- **Web:** `POST /receipts/query` con `{ "message": "<2-500 caracteres>" }` responde `{ "answer": string }`. Mismo `AuthGuard` que el resto de la API; la pestaña "Boletas" monta el chat al final.
+
+El modelo (`RECEIPT_QUERY_MODEL`) solo puede llamar cuatro tools de **solo lectura**, siempre filtradas por `couple_id` en SQL parametrizado fijo (nunca text-to-SQL). Los argumentos se validan con Zod antes de ejecutar; un argumento inválido vuelve al modelo como `{ error: 'invalid_arguments' }`.
+
+| Tool | Argumentos | Devuelve |
+| --- | --- | --- |
+| `get_month_summary` | `year`, `month` | total del mes, cantidad de boletas y desglose por categoría |
+| `get_top_products` | `year`, `month`, `limit` (1-10 o null) | productos con mayor gasto (nombre canónico o descripción) |
+| `get_category_spend` | `category`, `from`, `to` (≤ 366 días) | total y detalle por mes de una categoría |
+| `search_items` | `text` (2-80), `year`, `month` | ítems cuya descripción o producto contiene el texto, con fecha, comercio y monto (máx. 20) |
+
+Solo se consideran boletas `ready`. Las tools no filtran por comercio: una pregunta "¿qué compré en Jumbo?" solo se resuelve si el texto aparece en los ítems.
+
+Límites y variables:
+
+| Variable | Default | Efecto |
+| --- | --- | --- |
+| `RECEIPT_QUERY_MODEL` | obligatoria | modelo del chat (`gpt-5.4-mini` en el piloto) |
+| `RECEIPT_QUERY_MAX_TOOL_ROUNDS` | 3 | rondas de tools por pregunta; al agotarlas responde "No pude resolver la consulta" |
+| `RECEIPT_QUERY_MAX_OUTPUT_TOKENS` | 800 | tope de salida por llamada |
+| `RECEIPT_QUERY_TIMEOUT_MS` | 30000 | timeout por llamada al modelo |
+| `RECEIPT_QUERY_TEMPERATURE` / `RECEIPT_QUERY_REASONING_EFFORT` | 0 / vacío | parámetros del modelo (dejar vacíos si el modelo no los acepta) |
+| `RECEIPT_QUERY_RATE_LIMIT_MAX` / `_WINDOW_SECONDS` | 10 / 60 | límite por pareja, compartido entre WhatsApp y web (`rl:receipts:query:<coupleId>`) |
+| `RECEIPT_QUERY_MAX_MESSAGE_CHARS` | 500 | recorte del mensaje antes de enviarlo al modelo |
+
+Seguridad: el texto del usuario nunca entra al system prompt (viaja como turno de usuario), el modelo no recibe ids ni paths, y los logs solo registran `couple`, cantidad de tools, tokens y latencia (`query_answered couple=<id> tools=<n> tokens=<in>/<out> latency=<ms>`), nunca la pregunta ni la respuesta.
+
+Costo de referencia (piloto, `gpt-5.4-mini`): una pregunta con una tool consume ~1.600 tokens de entrada y ~80 de salida, 2-4 s de latencia. El gasto no se persiste en `receipt_extractions` (no está ligado a una boleta); vigilar por el log o el panel de OpenAI.
+
+Verificación local:
+
+```bash
+npm run receipts:simulate -- --text "¿cuánto gasté en septiembre?"
+# log: job_enqueued name=answer-query → query_answered … → whatsapp_text_local body="…"
+
+curl -s -X POST http://localhost:3000/receipts/query \
+  -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
+  -d '{"message":"¿Qué compré en septiembre?"}'
+# → {"answer":"…"}; message de 1 carácter → 400; sin token → 401
+```
