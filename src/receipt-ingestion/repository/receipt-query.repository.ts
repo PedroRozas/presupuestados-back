@@ -49,8 +49,8 @@ interface GroupListSqlRow {
   review_reasons: string[];
   page_count: number;
   item_count: number;
-  created_at: Date;
-  closed_at: Date | null;
+  created_at: Date | string;
+  closed_at: Date | string | null;
 }
 
 interface CategorySummarySqlRow {
@@ -89,8 +89,8 @@ export function mapGroupListRow(row: GroupListSqlRow): GroupListRow {
     reviewReasons: row.review_reasons,
     pageCount: row.page_count,
     itemCount: row.item_count,
-    createdAt: row.created_at,
-    closedAt: row.closed_at,
+    createdAt: new Date(row.created_at),
+    closedAt: row.closed_at === null ? null : new Date(row.closed_at),
   };
 }
 

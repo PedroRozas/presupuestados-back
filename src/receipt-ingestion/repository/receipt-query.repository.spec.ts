@@ -5,6 +5,25 @@ import {
 } from './receipt-query.repository.js';
 
 describe('mapGroupListRow', () => {
+  it('acepta timestamps como string y los devuelve como Date', () => {
+    const result = mapGroupListRow({
+      id: 'g3',
+      status: 'ready',
+      receipt_date: '2026-09-01',
+      merchant_raw: null,
+      merchant_name: null,
+      total_declared: null,
+      review_reasons: [],
+      page_count: 1,
+      item_count: 0,
+      created_at: '2026-09-01 12:00:00+00',
+      closed_at: null,
+    });
+    expect(result.createdAt).toBeInstanceOf(Date);
+    expect(result.createdAt.toISOString()).toBe('2026-09-01T12:00:00.000Z');
+    expect(result.closedAt).toBeNull();
+  });
+
   it('convierte snake_case a camelCase preservando los valores', () => {
     const createdAt = new Date('2026-09-01T12:00:00.000Z');
     const closedAt = new Date('2026-09-01T13:00:00.000Z');
