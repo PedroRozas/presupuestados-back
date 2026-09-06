@@ -13,12 +13,14 @@ import type {
   CloseGroupJobPayload,
   ExtractGroupJobPayload,
   IngestImageJobPayload,
+  NormalizeGroupJobPayload,
   NotifyUserJobPayload,
 } from './receipt-queue.constants.js';
 import { IngestImageProcessor } from './processors/ingest-image.processor.js';
 import { CloseGroupProcessor } from './processors/close-group.processor.js';
 import { NotifyUserProcessor } from './processors/notify-user.processor.js';
 import { ExtractGroupProcessor } from './processors/extract-group.processor.js';
+import { NormalizeGroupProcessor } from './processors/normalize-group.processor.js';
 
 export class UnknownReceiptJobError extends Error {
   constructor(name: string) {
@@ -39,6 +41,7 @@ export class ReceiptWorkerService implements OnModuleInit, OnModuleDestroy {
     private readonly closeGroup: CloseGroupProcessor,
     private readonly notifyUser: NotifyUserProcessor,
     private readonly extractGroup: ExtractGroupProcessor,
+    private readonly normalizeGroup: NormalizeGroupProcessor,
   ) {}
 
   onModuleInit(): void {
@@ -107,6 +110,10 @@ export class ReceiptWorkerService implements OnModuleInit, OnModuleDestroy {
         return this.extractGroup.process(
           job.data as ExtractGroupJobPayload,
           job.attemptsMade + 1,
+        );
+      case RECEIPT_JOB.NORMALIZE_GROUP:
+        return this.normalizeGroup.process(
+          job.data as NormalizeGroupJobPayload,
         );
       default:
         throw new UnknownReceiptJobError(job.name);

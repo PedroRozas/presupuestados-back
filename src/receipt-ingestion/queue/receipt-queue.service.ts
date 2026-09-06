@@ -14,6 +14,7 @@ import type {
   CloseGroupJobPayload,
   ExtractGroupJobPayload,
   IngestImageJobPayload,
+  NormalizeGroupJobPayload,
   NotifyUserJobPayload,
 } from './receipt-queue.constants.js';
 
@@ -91,6 +92,13 @@ export class ReceiptQueueService implements OnModuleDestroy {
   async enqueueExtractGroup(payload: ExtractGroupJobPayload): Promise<void> {
     await this.getQueue().add(RECEIPT_JOB.EXTRACT_GROUP, payload);
     this.logger.log(`job_enqueued name=${RECEIPT_JOB.EXTRACT_GROUP}`);
+  }
+
+  async enqueueNormalizeGroup(
+    payload: NormalizeGroupJobPayload,
+  ): Promise<void> {
+    await this.getQueue().add(RECEIPT_JOB.NORMALIZE_GROUP, payload);
+    this.logger.log(`job_enqueued name=${RECEIPT_JOB.NORMALIZE_GROUP}`);
   }
 
   async onModuleDestroy(): Promise<void> {

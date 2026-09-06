@@ -9,18 +9,25 @@ import { ReceiptGroupsRepository } from './repository/receipt-groups.repository.
 import { ReceiptImagesRepository } from './repository/receipt-images.repository.js';
 import { ReceiptExtractionsRepository } from './repository/receipt-extractions.repository.js';
 import { ReceiptItemsRepository } from './repository/receipt-items.repository.js';
+import { ReceiptProductsRepository } from './repository/receipt-products.repository.js';
+import { ReceiptMerchantsRepository } from './repository/receipt-merchants.repository.js';
 import { ReceiptQueueService } from './queue/receipt-queue.service.js';
 import { ReceiptWorkerService } from './queue/receipt-worker.service.js';
 import { IngestImageProcessor } from './queue/processors/ingest-image.processor.js';
 import { CloseGroupProcessor } from './queue/processors/close-group.processor.js';
 import { NotifyUserProcessor } from './queue/processors/notify-user.processor.js';
 import { ExtractGroupProcessor } from './queue/processors/extract-group.processor.js';
+import { NormalizeGroupProcessor } from './queue/processors/normalize-group.processor.js';
 import { ImageProcessorService } from './media/image-processor.service.js';
 import { ReceiptStorageService } from './storage/receipt-storage.service.js';
 import { ReceiptGroupService } from './groups/receipt-group.service.js';
 import { ExtractionService } from './extraction/extraction.service.js';
 import { ExtractionUsageRepository } from './extraction/extraction-usage.repository.js';
-import { LLM_EXTRACTION_PROVIDER } from './llm/llm.interfaces.js';
+import { NormalizationService } from './normalization/normalization.service.js';
+import {
+  LLM_EXTRACTION_PROVIDER,
+  LLM_NORMALIZATION_PROVIDER,
+} from './llm/llm.interfaces.js';
 import { OpenAiLlmProvider } from './llm/openai-llm.provider.js';
 import { WHATSAPP_MEDIA_CLIENT } from './whatsapp/whatsapp-media.client.js';
 import { MetaWhatsAppMediaClient } from './whatsapp/meta-whatsapp-media.client.js';
@@ -41,19 +48,24 @@ import { LocalWhatsAppMessagingClient } from './whatsapp/local-whatsapp-messagin
     ReceiptImagesRepository,
     ReceiptExtractionsRepository,
     ReceiptItemsRepository,
+    ReceiptProductsRepository,
+    ReceiptMerchantsRepository,
     ReceiptQueueService,
     ReceiptWorkerService,
     IngestImageProcessor,
     CloseGroupProcessor,
     NotifyUserProcessor,
     ExtractGroupProcessor,
+    NormalizeGroupProcessor,
     ImageProcessorService,
     ReceiptStorageService,
     ReceiptGroupService,
     ExtractionService,
     ExtractionUsageRepository,
+    NormalizationService,
     OpenAiLlmProvider,
     { provide: LLM_EXTRACTION_PROVIDER, useExisting: OpenAiLlmProvider },
+    { provide: LLM_NORMALIZATION_PROVIDER, useExisting: OpenAiLlmProvider },
     {
       provide: WHATSAPP_MEDIA_CLIENT,
       inject: [ReceiptConfigService],

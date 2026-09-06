@@ -17,7 +17,10 @@ const summary = {
 
 const build = (outcome: unknown, markFailedResult = true) => {
   const extraction = { extractGroup: jest.fn(() => Promise.resolve(outcome)) };
-  const queue = { enqueueNotifyUser: jest.fn(() => Promise.resolve()) };
+  const queue = {
+    enqueueNotifyUser: jest.fn(() => Promise.resolve()),
+    enqueueNormalizeGroup: jest.fn(() => Promise.resolve()),
+  };
   const groups = {
     markFailed: jest.fn(() => Promise.resolve(markFailedResult)),
   };
@@ -30,7 +33,7 @@ const build = (outcome: unknown, markFailedResult = true) => {
 };
 
 describe('ExtractGroupProcessor', () => {
-  it('avisa "boleta lista" cuando la extracción queda ready', async () => {
+  it('avisa "boleta lista" y encola normalize-group cuando la extracción queda ready', async () => {
     const { processor, extraction, queue } = build({
       outcome: 'extracted',
       status: 'ready',
@@ -47,9 +50,13 @@ describe('ExtractGroupProcessor', () => {
       toPhoneE164: '+56912345678',
       body: 'Boleta lista: JUMBO, 01-09-2026, total $3.480, 2 ítems.',
     });
+    expect(queue.enqueueNormalizeGroup).toHaveBeenCalledWith({
+      groupId: 'g1',
+      coupleId: 'c1',
+    });
   });
 
-  it('avisa revisión con motivos cuando queda needs_review', async () => {
+  it('avisa revisión con motivos y encola normalize-group cuando queda needs_review', async () => {
     const { processor, queue } = build({
       outcome: 'extracted',
       status: 'needs_review',
@@ -64,9 +71,13 @@ describe('ExtractGroupProcessor', () => {
         ) as string,
       }),
     );
+    expect(queue.enqueueNormalizeGroup).toHaveBeenCalledWith({
+      groupId: 'g1',
+      coupleId: 'c1',
+    });
   });
 
-  it('avisa el tope mensual', async () => {
+  it('avisa el tope mensual sin encolar normalize-group', async () => {
     const { processor, queue } = build({ outcome: 'monthly_cap' });
     await processor.process(payload, 1);
     expect(queue.enqueueNotifyUser).toHaveBeenCalledWith(
@@ -74,22 +85,25 @@ describe('ExtractGroupProcessor', () => {
         body: expect.stringContaining('tope mensual') as string,
       }),
     );
+    expect(queue.enqueueNormalizeGroup).not.toHaveBeenCalled();
   });
 
-  it('no avisa cuando la extracción se omite por not_extracting o not_found', async () => {
+  it('no avisa ni encola normalize-group cuando la extracción se omite por not_extracting o not_found', async () => {
     const { processor, queue } = build({
       outcome: 'skipped',
       reason: 'not_extracting',
     });
     await processor.process(payload, 1);
     expect(queue.enqueueNotifyUser).not.toHaveBeenCalled();
+    expect(queue.enqueueNormalizeGroup).not.toHaveBeenCalled();
 
     const notFound = build({ outcome: 'skipped', reason: 'not_found' });
     await notFound.processor.process(payload, 1);
     expect(notFound.queue.enqueueNotifyUser).not.toHaveBeenCalled();
+    expect(notFound.queue.enqueueNormalizeGroup).not.toHaveBeenCalled();
   });
 
-  it('avisa con el mensaje de fallo cuando el grupo no tiene imágenes', async () => {
+  it('avisa con el mensaje de fallo y no encola normalize-group cuando el grupo no tiene imágenes', async () => {
     const { processor, queue } = build({
       outcome: 'skipped',
       reason: 'no_images',
@@ -100,6 +114,7 @@ describe('ExtractGroupProcessor', () => {
         body: expect.stringContaining('No pude leer la boleta') as string,
       }),
     );
+    expect(queue.enqueueNormalizeGroup).not.toHaveBeenCalled();
   });
 
   it('al agotar reintentos marca failed y avisa cuando markFailed devuelve true', async () => {

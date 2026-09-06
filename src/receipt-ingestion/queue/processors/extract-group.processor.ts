@@ -40,6 +40,12 @@ export class ExtractGroupProcessor {
         body,
       });
     }
+    if (outcome.outcome === 'extracted') {
+      await this.queue.enqueueNormalizeGroup({
+        groupId: payload.groupId,
+        coupleId: payload.coupleId,
+      });
+    }
     return outcome;
   }
 
