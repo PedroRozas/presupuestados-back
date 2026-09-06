@@ -50,6 +50,14 @@ Variables de la extracción con LLM:
 - `RECEIPT_TOTAL_TOLERANCE_CLP`: diferencia máxima en CLP entre el total declarado y la suma de ítems antes de marcar `total_mismatch`.
 - `RECEIPT_MONTHLY_EXTRACTION_CAP`: tope de extracciones por pareja y mes calendario.
 
+Variables de la normalización con LLM:
+
+- `RECEIPT_NORMALIZATION_MODEL`: modelo pequeño usado para desambiguar merchants y productos.
+- `RECEIPT_NORMALIZATION_MAX_OUTPUT_TOKENS`: tope de tokens de salida por llamada.
+- `RECEIPT_MATCH_HIGH`: similitud trigram mínima para dar por bueno un match automático.
+- `RECEIPT_MATCH_LOW`: similitud trigram mínima para considerar un candidato; por debajo se crea uno nuevo directo.
+- `RECEIPT_CANDIDATE_LIMIT`: cantidad máxima de candidatos por búsqueda de similitud.
+
 `OPENAI_API_KEY` es obligatoria para que la extracción funcione.
 
 ## 5. Prueba local sin Meta
@@ -60,9 +68,20 @@ Variables de la extracción con LLM:
 4. `npm run start:dev`.
 5. `npm run receipts:simulate -- boleta-1.jpg` (usa `RECEIPT_SIMULATE_PHONE` y `RECEIPT_SIMULATE_BASE_URL`, este último por defecto `http://localhost:3000`).
 6. Verificar en logs `job_enqueued`, luego `image_stored`, y en Supabase: fila en `receipt_images`, objeto `.webp` en el bucket.
-7. `npm run receipts:simulate -- --text "listo"` cierra el grupo abierto de inmediato. Verificar en logs `group_closed`, luego `job_enqueued name=extract-group` y `extraction_done group=... status=ready|needs_review items=N tokens=I/O`, y el aviso final `whatsapp_text_local ... body="Boleta lista: ..."` o `"... necesita revisión ..."`. En la base, `select description_raw, category, qty, unit_price, amount, confidence, position from receipt_items where group_id = '<id>' order by position;` debe listar los ítems extraídos.
+7. `npm run receipts:simulate -- --text "listo"` cierra el grupo abierto de inmediato. Verificar en logs `group_closed`, luego `job_enqueued name=extract-group` y `extraction_done group=... status=ready|needs_review items=N tokens=I/O`, luego `job_enqueued name=normalize-group` y `normalize_group_done group=... merchant=matched|created matched=N created=N`, y el aviso final `whatsapp_text_local ... body="Boleta lista: ..."` o `"... necesita revisión ..."`. En la base, `select description_raw, category, qty, unit_price, amount, confidence, position from receipt_items where group_id = '<id>' order by position;` debe listar los ítems extraídos.
+8. Verificar la normalización en la base:
+
+```sql
+select i.description_raw, p.canonical_name, p.default_category, p.aliases
+from receipt_items i left join receipt_products p on p.id = i.product_id
+where i.group_id = '<id>' order by i.position;
+select g.merchant_raw, m.canonical_name, m.rut, m.aliases
+from receipt_groups g left join receipt_merchants m on m.id = g.merchant_id where g.id = '<id>';
+```
 
 Al cerrar, el grupo pasa a `extracting`, se leen sus imágenes desde Storage y un modelo multimodal extrae los ítems. El resultado queda en `receipt_items` y `receipt_extractions`; el grupo termina en `ready` o `needs_review` (motivos en `review_reasons`) y el remitente recibe un resumen. Tras 3 intentos fallidos el grupo queda `failed` y se avisa. El tope mensual por pareja (`RECEIPT_MONTHLY_EXTRACTION_CAP`) se controla en `receipt_extraction_usage`.
+
+Tras la extracción se encola `normalize-group`: merchant por RUT o similitud trigram, productos por similitud; solo la zona ambigua (entre `RECEIPT_MATCH_LOW` y `RECEIPT_MATCH_HIGH`) consulta al modelo pequeño, en una sola llamada por boleta. Las decisiones se guardan como `aliases` en `receipt_products` / `receipt_merchants`.
 
 `RECEIPT_WORKER_CONCURRENCY` debe quedarse en 1: el índice único evita grupos duplicados, pero la asignación de `page_index` no es atómica y con más de un worker dos fotos del mismo grupo pueden pisarse en Storage.
 
@@ -71,6 +90,8 @@ Al cerrar, el grupo pasa a `extracting`, se leen sus imágenes desde Storage y u
 La migración `drizzle/0004_daffy_triton.sql` (tablas `receipt_*`) se aplicó con `psql --single-transaction -f drizzle/0004_daffy_triton.sql` porque `drizzle.__drizzle_migrations` está vacía en esta base de datos. **Nunca correr `npm run db:migrate` contra esta base**: reproduciría las migraciones 0000-0004 desde cero y fallaría al chocar con objetos ya existentes. Las migraciones futuras deben aplicarse de la misma forma (`psql --single-transaction -f <archivo>`) hasta que `drizzle.__drizzle_migrations` refleje el historial real.
 
 La migración `drizzle/0005_familiar_silver_sable.sql` se aplicó de la misma forma (`psql --single-transaction`) el 2026-09-04.
+
+La migración `drizzle/0006_talented_blade.sql` (columna `merchant_rut` en `receipt_groups`) se aplicó de la misma forma (`psql --single-transaction`) el 2026-09-05.
 
 ## 7. Uso de tokens y latencia
 
