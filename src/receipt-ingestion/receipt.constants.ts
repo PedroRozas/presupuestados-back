@@ -90,6 +90,7 @@ export const RECEIPT_DEFAULTS = {
   queryTopProductsLimit: 10,
   querySearchLimit: 20,
   queryTimeoutMs: 30000,
+  queryTemperature: 0,
 } as const;
 
 export const RECEIPT_IMAGE_CONTENT_TYPE = 'image/webp';

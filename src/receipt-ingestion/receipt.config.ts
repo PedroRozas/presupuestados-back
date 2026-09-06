@@ -286,6 +286,17 @@ export class ReceiptConfigService {
     );
   }
 
+  get queryTemperature(): number | undefined {
+    return this.getOptionalNumberWithDefault(
+      'RECEIPT_QUERY_TEMPERATURE',
+      RECEIPT_DEFAULTS.queryTemperature,
+    );
+  }
+
+  get queryReasoningEffort(): string | undefined {
+    return this.getOptionalString('RECEIPT_QUERY_REASONING_EFFORT');
+  }
+
   get queryMaxMessageChars(): number {
     return this.getNumber(
       'RECEIPT_QUERY_MAX_MESSAGE_CHARS',

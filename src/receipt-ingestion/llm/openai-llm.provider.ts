@@ -10,11 +10,17 @@ import type {
   LlmNormalizationInput,
   LlmNormalizationProvider,
   LlmNormalizationResult,
+  LlmQueryInput,
+  LlmQueryProvider,
+  LlmQueryResult,
+  LlmToolCall,
 } from './llm.interfaces.js';
+import { extractFunctionCalls } from './openai-function-calls.js';
 import { readOpenAiUsage } from './openai-usage.js';
 
 export interface OpenAiResponseLike {
   output_text: string;
+  output?: unknown[];
   status?: string;
   incomplete_details?: { reason?: string } | null;
   usage?: unknown;
@@ -79,7 +85,7 @@ const toImageContent = (image: LlmImageInput) => ({
 
 @Injectable()
 export class OpenAiLlmProvider
-  implements LlmExtractionProvider, LlmNormalizationProvider
+  implements LlmExtractionProvider, LlmNormalizationProvider, LlmQueryProvider
 {
   private client: OpenAiClientLike | undefined;
 
@@ -132,6 +138,92 @@ export class OpenAiLlmProvider
       reasoningEffort: this.config.normalizationReasoningEffort,
     });
     return this.call(params, input.timeoutMs, this.config.normalizationModel);
+  }
+
+  async answerWithTools(input: LlmQueryInput): Promise<LlmQueryResult> {
+    const startedAt = Date.now();
+    const model = this.config.queryModel;
+    const conversation: unknown[] = [
+      {
+        role: 'user',
+        content: [{ type: 'input_text', text: input.userMessage }],
+      },
+    ];
+    const totals = { tokensIn: 0, tokensOut: 0, toolCallCount: 0 };
+    let responseModel = model;
+
+    for (let round = 0; round <= input.maxToolRounds; round++) {
+      const response = await this.getClient().responses.create(
+        this.queryParams(model, input, conversation),
+        { timeout: input.timeoutMs },
+      );
+      const usage = readOpenAiUsage(response.usage);
+      totals.tokensIn += usage.tokensIn;
+      totals.tokensOut += usage.tokensOut;
+      responseModel = response.model ?? responseModel;
+
+      const calls = extractFunctionCalls(response.output);
+      const exhausted = calls.length > 0 && round === input.maxToolRounds;
+      if (calls.length === 0 || exhausted) {
+        return {
+          text: exhausted ? '' : response.output_text,
+          toolCallCount: totals.toolCallCount,
+          model: responseModel,
+          tokensIn: totals.tokensIn,
+          tokensOut: totals.tokensOut,
+          latencyMs: Date.now() - startedAt,
+          exhausted,
+        };
+      }
+      conversation.push(...(response.output ?? []));
+      totals.toolCallCount += calls.length;
+      await this.runToolCalls(calls, input, conversation);
+    }
+    throw new Error('llm_query_loop_exited_without_response');
+  }
+
+  private async runToolCalls(
+    calls: LlmToolCall[],
+    input: LlmQueryInput,
+    conversation: unknown[],
+  ): Promise<void> {
+    for (const call of calls) {
+      const output = await input.executeTool(call);
+      conversation.push({
+        type: 'function_call_output',
+        call_id: call.callId,
+        output: JSON.stringify(output),
+      });
+    }
+  }
+
+  private queryParams(
+    model: string,
+    input: LlmQueryInput,
+    conversation: unknown[],
+  ): Record<string, unknown> {
+    const temperature = this.config.queryTemperature;
+    const reasoningEffort = this.config.queryReasoningEffort;
+    return {
+      model,
+      instructions: input.systemPrompt,
+      input: conversation,
+      tools: input.tools.map((tool) => ({
+        type: 'function',
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.parametersJsonSchema,
+        strict: true,
+      })),
+      tool_choice: 'auto',
+      parallel_tool_calls: false,
+      max_output_tokens: input.maxOutputTokens,
+      ...(temperature === undefined ? {} : { temperature }),
+      ...(reasoningEffort === undefined
+        ? {}
+        : { reasoning: { effort: reasoningEffort } }),
+      store: false,
+    };
   }
 
   private baseParams(options: BaseParamsOptions): Record<string, unknown> {
