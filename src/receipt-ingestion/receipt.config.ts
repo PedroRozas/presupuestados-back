@@ -189,6 +189,35 @@ export class ReceiptConfigService {
     );
   }
 
+  get normalizationTimeoutMs(): number {
+    return this.getNumber(
+      'RECEIPT_NORMALIZATION_TIMEOUT_MS',
+      RECEIPT_DEFAULTS.normalizationTimeoutMs,
+    );
+  }
+
+  get extractionTemperature(): number | undefined {
+    return this.getOptionalNumberWithDefault(
+      'RECEIPT_EXTRACTION_TEMPERATURE',
+      RECEIPT_DEFAULTS.extractionTemperature,
+    );
+  }
+
+  get normalizationTemperature(): number | undefined {
+    return this.getOptionalNumber('RECEIPT_NORMALIZATION_TEMPERATURE');
+  }
+
+  get extractionReasoningEffort(): string | undefined {
+    return this.getOptionalString('RECEIPT_EXTRACTION_REASONING_EFFORT');
+  }
+
+  get normalizationReasoningEffort(): string | undefined {
+    return this.getOptionalStringWithDefault(
+      'RECEIPT_NORMALIZATION_REASONING_EFFORT',
+      RECEIPT_DEFAULTS.normalizationReasoningEffort,
+    );
+  }
+
   get matchHigh(): number {
     return this.getRatio('RECEIPT_MATCH_HIGH', RECEIPT_DEFAULTS.matchHigh);
   }
@@ -239,5 +268,37 @@ export class ReceiptConfigService {
     const value = this.configService.get<string>(key);
     if (value === undefined || value === '') return fallback;
     return value === 'true' || value === '1';
+  }
+
+  private getOptionalString(key: string): string | undefined {
+    const value = this.configService.get<string>(key);
+    return value && value.length > 0 ? value : undefined;
+  }
+
+  private getOptionalStringWithDefault(
+    key: string,
+    fallback: string,
+  ): string | undefined {
+    const value = this.configService.get<string>(key);
+    if (value === undefined) return fallback;
+    return value.length > 0 ? value : undefined;
+  }
+
+  private getOptionalNumber(key: string): number | undefined {
+    const raw = this.configService.get<string>(key);
+    if (!raw) return undefined;
+    const value = Number(raw);
+    return Number.isFinite(value) ? value : undefined;
+  }
+
+  private getOptionalNumberWithDefault(
+    key: string,
+    fallback: number,
+  ): number | undefined {
+    const raw = this.configService.get<string>(key);
+    if (raw === undefined) return fallback;
+    if (raw === '') return undefined;
+    const value = Number(raw);
+    return Number.isFinite(value) ? value : fallback;
   }
 }

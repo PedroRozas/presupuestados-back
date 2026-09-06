@@ -33,6 +33,11 @@ export class UnknownReceiptJobError extends Error {
   }
 }
 
+const hasGroupId = (data: unknown): data is { groupId: string } =>
+  typeof data === 'object' &&
+  data !== null &&
+  typeof (data as Record<string, unknown>)['groupId'] === 'string';
+
 @Injectable()
 export class ReceiptWorkerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ReceiptWorkerService.name);
@@ -50,7 +55,7 @@ export class ReceiptWorkerService implements OnModuleInit, OnModuleDestroy {
     private readonly staleGroupSweeper: StaleGroupSweeperService,
   ) {}
 
-  async onModuleInit(): Promise<void> {
+  onModuleInit(): void {
     if (!this.config.workerEnabled) {
       this.logger.log('receipt_worker_disabled');
       return;
@@ -68,7 +73,10 @@ export class ReceiptWorkerService implements OnModuleInit, OnModuleDestroy {
       concurrency: this.config.workerConcurrency,
     });
     this.registerFailureHandler(this.worker);
-    await this.queue.ensureSweepScheduler();
+    void this.queue.ensureSweepScheduler().catch((error: unknown) => {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(`sweep_scheduler_setup_failed error=${message}`);
+    });
     this.logger.log('receipt_worker_started');
   }
 
@@ -79,8 +87,11 @@ export class ReceiptWorkerService implements OnModuleInit, OnModuleDestroy {
 
   private registerFailureHandler(worker: Worker): void {
     worker.on('failed', (job, error) => {
+      const groupSuffix = hasGroupId(job?.data)
+        ? ` group=${job.data.groupId}`
+        : '';
       this.logger.error(
-        `job_failed name=${job?.name ?? 'unknown'} attempt=${job?.attemptsMade ?? 0} error=${error.message}`,
+        `job_failed name=${job?.name ?? 'unknown'} attempt=${job?.attemptsMade ?? 0}${groupSuffix} error=${error.message}`,
       );
       if (job && this.isExhaustedExtraction(job)) {
         void this.extractGroup

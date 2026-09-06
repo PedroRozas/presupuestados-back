@@ -26,6 +26,10 @@ const config = {
   openAiApiKey: 'k',
   extractionModel: 'test-model',
   normalizationModel: 'small-model',
+  extractionTemperature: 0,
+  extractionReasoningEffort: undefined,
+  normalizationTemperature: undefined,
+  normalizationReasoningEffort: 'minimal',
 } as ReceiptConfigService;
 
 const buildProvider = (response: OpenAiResponseLike) => {
@@ -63,6 +67,7 @@ describe('OpenAiLlmProvider', () => {
     expect(params['instructions']).toBe('sys');
     expect(params['max_output_tokens']).toBe(500);
     expect(params['temperature']).toBe(0);
+    expect(params).not.toHaveProperty('reasoning');
     expect(params['store']).toBe(false);
     expect(params['text']).toEqual({
       format: {
@@ -150,6 +155,7 @@ describe('OpenAiLlmProvider', () => {
     expect(params['instructions']).toBe('sys-n');
     expect(params['max_output_tokens']).toBe(600);
     expect(params).not.toHaveProperty('temperature');
+    expect(params['reasoning']).toEqual({ effort: 'minimal' });
     expect(params['input']).toEqual([
       { role: 'user', content: [{ type: 'input_text', text: 'user-n' }] },
     ]);

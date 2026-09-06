@@ -30,7 +30,7 @@ export class ReceiptProductsRepository {
         ) as score
       from receipt_products p
       where p.couple_id = ${coupleId}
-      order by score desc
+      order by score desc, p.id
       limit ${limit}
     `);
     return toScoredCandidates(

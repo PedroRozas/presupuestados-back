@@ -33,9 +33,19 @@ export interface OpenAiClientLike {
 export type OpenAiClientFactory = (apiKey: string) => OpenAiClientLike;
 export const OPENAI_CLIENT_FACTORY = Symbol('OPENAI_CLIENT_FACTORY');
 
+interface BaseParamsOptions {
+  model: string;
+  instructions: string;
+  content: unknown[];
+  maxOutputTokens: number;
+  schemaName: string;
+  schema: Record<string, unknown>;
+  temperature?: number;
+  reasoningEffort?: string;
+}
+
 const IMAGE_DETAIL = 'high';
 const RESPONSE_STATUS_INCOMPLETE = 'incomplete';
-const TEMPERATURE = 0;
 const OPENAI_MAX_RETRIES = 0;
 
 export class LlmEmptyResponseError extends Error {
@@ -94,15 +104,16 @@ export class OpenAiLlmProvider
       { type: 'input_text' as const, text: input.userPrompt },
       ...input.images.map(toImageContent),
     ];
-    const params = this.baseParams(
-      this.config.extractionModel,
-      input.systemPrompt,
+    const params = this.baseParams({
+      model: this.config.extractionModel,
+      instructions: input.systemPrompt,
       content,
-      input.maxOutputTokens,
-      input.schemaName,
-      input.outputJsonSchema,
-      TEMPERATURE,
-    );
+      maxOutputTokens: input.maxOutputTokens,
+      schemaName: input.schemaName,
+      schema: input.outputJsonSchema,
+      temperature: this.config.extractionTemperature,
+      reasoningEffort: this.config.extractionReasoningEffort,
+    });
     return this.call(params, input.timeoutMs, this.config.extractionModel);
   }
 
@@ -110,39 +121,38 @@ export class OpenAiLlmProvider
     input: LlmNormalizationInput,
   ): Promise<LlmNormalizationResult> {
     const content = [{ type: 'input_text' as const, text: input.userPrompt }];
-    const params = this.baseParams(
-      this.config.normalizationModel,
-      input.systemPrompt,
+    const params = this.baseParams({
+      model: this.config.normalizationModel,
+      instructions: input.systemPrompt,
       content,
-      input.maxOutputTokens,
-      input.schemaName,
-      input.outputJsonSchema,
-    );
+      maxOutputTokens: input.maxOutputTokens,
+      schemaName: input.schemaName,
+      schema: input.outputJsonSchema,
+      temperature: this.config.normalizationTemperature,
+      reasoningEffort: this.config.normalizationReasoningEffort,
+    });
     return this.call(params, input.timeoutMs, this.config.normalizationModel);
   }
 
-  private baseParams(
-    model: string,
-    systemPrompt: string,
-    content: unknown[],
-    maxOutputTokens: number,
-    schemaName: string,
-    schema: Record<string, unknown>,
-    temperature?: number,
-  ): Record<string, unknown> {
+  private baseParams(options: BaseParamsOptions): Record<string, unknown> {
     return {
-      model,
-      instructions: systemPrompt,
-      input: [{ role: 'user', content }],
-      max_output_tokens: maxOutputTokens,
-      ...(temperature === undefined ? {} : { temperature }),
+      model: options.model,
+      instructions: options.instructions,
+      input: [{ role: 'user', content: options.content }],
+      max_output_tokens: options.maxOutputTokens,
+      ...(options.temperature === undefined
+        ? {}
+        : { temperature: options.temperature }),
+      ...(options.reasoningEffort === undefined
+        ? {}
+        : { reasoning: { effort: options.reasoningEffort } }),
       store: false,
       text: {
         format: {
           type: 'json_schema',
-          name: schemaName,
+          name: options.schemaName,
           strict: true,
-          schema,
+          schema: options.schema,
         },
       },
     };

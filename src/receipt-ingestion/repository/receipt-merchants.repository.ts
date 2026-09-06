@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { DRIZZLE } from '../../database/database.module.js';
 import * as schema from '../../database/schema/index.js';
@@ -46,7 +46,7 @@ export class ReceiptMerchantsRepository {
         ) as score
       from receipt_merchants m
       where m.couple_id = ${coupleId}
-      order by score desc
+      order by score desc, m.id
       limit ${limit}
     `);
     return toScoredCandidates(
@@ -70,6 +70,15 @@ export class ReceiptMerchantsRepository {
       if (!isUniqueViolation(error)) throw error;
     }
     return this.findByName(coupleId, canonicalName);
+  }
+
+  async setRut(merchantId: string, rut: string): Promise<void> {
+    await this.db
+      .update(receiptMerchants)
+      .set({ rut })
+      .where(
+        and(eq(receiptMerchants.id, merchantId), isNull(receiptMerchants.rut)),
+      );
   }
 
   async addAlias(merchantId: string, alias: string): Promise<void> {

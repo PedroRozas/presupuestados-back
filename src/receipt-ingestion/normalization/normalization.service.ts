@@ -1,13 +1,22 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { ReceiptGroup, ReceiptItem } from '../../database/schema/index.js';
 import {
+  hasLlmUsage,
   LLM_NORMALIZATION_PROVIDER,
   type LlmNormalizationInput,
   type LlmNormalizationProvider,
+  type LlmNormalizationResult,
   type NormalizationCandidate,
   type NormalizationQuestion,
 } from '../llm/llm.interfaces.js';
 import { ReceiptConfigService } from '../receipt.config.js';
+import {
+  MERCHANT_DECISION_KEY,
+  NORMALIZATION_BASE_OUTPUT_TOKENS,
+  NORMALIZATION_TOKENS_PER_QUESTION,
+  RECEIPT_EXTRACTION_STATUS,
+} from '../receipt.constants.js';
+import { ReceiptExtractionsRepository } from '../repository/receipt-extractions.repository.js';
 import { ReceiptMerchantsRepository } from '../repository/receipt-merchants.repository.js';
 import { ReceiptGroupsRepository } from '../repository/receipt-groups.repository.js';
 import { ReceiptItemsRepository } from '../repository/receipt-items.repository.js';
@@ -16,6 +25,7 @@ import { toCanonicalName } from './canonical-name.js';
 import { decideMatch, type ScoredCandidate } from './match-decision.js';
 import { parseNormalizationOutput } from './normalization-output.schema.js';
 import { NORMALIZATION_PROMPT_V1 } from './prompts/normalization-prompt.v1.js';
+import { normalizeRut } from './rut.js';
 
 export interface NormalizeGroupInput {
   groupId: string;
@@ -51,6 +61,7 @@ type MerchantNormalization =
 type ItemNormalization =
   | { kind: 'matched' }
   | { kind: 'created' }
+  | { kind: 'skipped' }
   | { kind: 'pending'; pending: PendingItem };
 
 interface ItemsNormalization {
@@ -92,6 +103,7 @@ export class NormalizationService {
     private readonly items: ReceiptItemsRepository,
     private readonly products: ReceiptProductsRepository,
     private readonly merchants: ReceiptMerchantsRepository,
+    private readonly extractions: ReceiptExtractionsRepository,
     @Inject(LLM_NORMALIZATION_PROVIDER)
     private readonly provider: LlmNormalizationProvider,
     private readonly config: ReceiptConfigService,
@@ -161,7 +173,7 @@ export class NormalizationService {
   ): Promise<MerchantNormalization> {
     if (group.merchantId) return { kind: 'resolved', outcome: 'matched' };
     if (!group.merchantRaw) return { kind: 'resolved', outcome: 'none' };
-    const rut = group.merchantRut ?? null;
+    const rut = normalizeRut(group.merchantRut ?? null);
     if (rut) {
       const found = await this.merchants.findByRut(group.coupleId, rut);
       if (found) {
@@ -170,6 +182,7 @@ export class NormalizationService {
           found.id,
           toCanonicalName(group.merchantRaw),
           found.canonicalName,
+          rut,
         );
         return { kind: 'resolved', outcome: 'matched' };
       }
@@ -182,6 +195,7 @@ export class NormalizationService {
     rut: string | null,
   ): Promise<MerchantNormalization> {
     const canonicalRaw = toCanonicalName(group.merchantRaw ?? '');
+    if (canonicalRaw.length === 0) return { kind: 'resolved', outcome: 'none' };
     const candidates = await this.merchants.findCandidates(
       group.coupleId,
       canonicalRaw,
@@ -197,6 +211,7 @@ export class NormalizationService {
         decision.id,
         canonicalRaw,
         candidates,
+        rut,
       );
     }
     if (decision.kind === 'new') {
@@ -207,7 +222,11 @@ export class NormalizationService {
       pending: {
         canonicalRaw,
         rut,
-        question: buildQuestion('merchant', canonicalRaw, decision.candidates),
+        question: buildQuestion(
+          MERCHANT_DECISION_KEY,
+          canonicalRaw,
+          decision.candidates,
+        ),
       },
     };
   }
@@ -217,6 +236,7 @@ export class NormalizationService {
     merchantId: string,
     canonicalRaw: string,
     candidates: ScoredCandidate[],
+    groupRut: string | null,
   ): Promise<MerchantNormalization> {
     const matchedCandidate = candidates.find((c) => c.id === merchantId);
     await this.applyMerchantResolution(
@@ -224,6 +244,7 @@ export class NormalizationService {
       merchantId,
       canonicalRaw,
       matchedCandidate?.canonicalName ?? canonicalRaw,
+      groupRut,
     );
     return { kind: 'resolved', outcome: 'matched' };
   }
@@ -232,7 +253,7 @@ export class NormalizationService {
     group: ReceiptGroup,
     canonicalRaw: string,
     rut: string | null,
-  ): Promise<MerchantNormalization> {
+  ): Promise<{ kind: 'resolved'; outcome: MerchantOutcome }> {
     const created = await this.merchants.create(
       group.coupleId,
       canonicalRaw,
@@ -247,10 +268,14 @@ export class NormalizationService {
     merchantId: string,
     canonicalRaw: string,
     matchedCanonicalName: string,
+    groupRut: string | null,
   ): Promise<void> {
     await this.groups.setMerchant(group.id, merchantId);
     if (matchedCanonicalName !== canonicalRaw) {
       await this.merchants.addAlias(merchantId, canonicalRaw);
+    }
+    if (groupRut !== null) {
+      await this.merchants.setRut(merchantId, groupRut);
     }
   }
 
@@ -266,7 +291,7 @@ export class NormalizationService {
       const outcome = await this.normalizeItem(group, item);
       if (outcome.kind === 'matched') matched += 1;
       else if (outcome.kind === 'created') created += 1;
-      else pendingItems.push(outcome.pending);
+      else if (outcome.kind === 'pending') pendingItems.push(outcome.pending);
     }
     return { matched, created, pendingItems };
   }
@@ -276,6 +301,7 @@ export class NormalizationService {
     item: ReceiptItem,
   ): Promise<ItemNormalization> {
     const canonicalRaw = toCanonicalName(item.descriptionRaw);
+    if (canonicalRaw.length === 0) return { kind: 'skipped' };
     const candidates = await this.products.findCandidates(
       group.coupleId,
       canonicalRaw,
@@ -346,14 +372,19 @@ export class NormalizationService {
   private buildProviderInput(
     questions: NormalizationQuestion[],
   ): LlmNormalizationInput {
+    const maxOutputTokens = Math.min(
+      NORMALIZATION_BASE_OUTPUT_TOKENS +
+        NORMALIZATION_TOKENS_PER_QUESTION * questions.length,
+      this.config.normalizationMaxOutputTokens,
+    );
     return {
       questions,
       systemPrompt: NORMALIZATION_PROMPT_V1.system,
       userPrompt: NORMALIZATION_PROMPT_V1.buildUser(questions),
       outputJsonSchema: NORMALIZATION_PROMPT_V1.outputJsonSchema,
       schemaName: NORMALIZATION_PROMPT_V1.schemaName,
-      maxOutputTokens: this.config.normalizationMaxOutputTokens,
-      timeoutMs: this.config.extractionTimeoutMs,
+      maxOutputTokens,
+      timeoutMs: this.config.normalizationTimeoutMs,
     };
   }
 
@@ -393,16 +424,31 @@ export class NormalizationService {
       ...(merchantPending ? [merchantPending.question] : []),
       ...itemPendings.map((pending) => pending.question),
     ];
-    const result = await this.provider.chooseCandidates(
-      this.buildProviderInput(questions),
-    );
+
+    let result: LlmNormalizationResult;
+    try {
+      result = await this.provider.chooseCandidates(
+        this.buildProviderInput(questions),
+      );
+    } catch (error) {
+      return this.degradePending(
+        group,
+        error,
+        questions.length,
+        merchantPending,
+        fallbackMerchantOutcome,
+        itemPendings,
+      );
+    }
+
+    await this.recordNormalizationLlm(group, questions.length, result);
     const decisionsByKey = this.decisionsByKey(result.rawText);
 
     const merchantOutcome = merchantPending
       ? await this.resolveMerchantDecision(
           group,
           merchantPending,
-          decisionsByKey.get('merchant') ?? null,
+          decisionsByKey.get(MERCHANT_DECISION_KEY) ?? null,
         )
       : fallbackMerchantOutcome;
 
@@ -413,6 +459,87 @@ export class NormalizationService {
     );
 
     return { merchantOutcome, itemsMatched, itemsCreated };
+  }
+
+  private async degradePending(
+    group: ReceiptGroup,
+    error: unknown,
+    questionCount: number,
+    merchantPending: PendingMerchant | undefined,
+    fallbackMerchantOutcome: MerchantOutcome,
+    itemPendings: PendingItem[],
+  ): Promise<ResolvedPending> {
+    const message = error instanceof Error ? error.message : String(error);
+    this.logger.warn(
+      `normalization_llm_failed group=${group.id} questions=${questionCount} error=${message}`,
+    );
+    await this.recordNormalizationFailure(group, message, error);
+
+    const merchantOutcome = merchantPending
+      ? (
+          await this.createNewMerchant(
+            group,
+            merchantPending.canonicalRaw,
+            merchantPending.rut,
+          )
+        ).outcome
+      : fallbackMerchantOutcome;
+
+    for (const pending of itemPendings) {
+      await this.createNewProduct(group, pending.item, pending.canonicalRaw);
+    }
+
+    return {
+      merchantOutcome,
+      itemsMatched: 0,
+      itemsCreated: itemPendings.length,
+    };
+  }
+
+  private async recordNormalizationLlm(
+    group: ReceiptGroup,
+    questionCount: number,
+    result: LlmNormalizationResult,
+  ): Promise<void> {
+    this.logger.log(
+      `normalization_llm group=${group.id} model=${result.model} tokens=${result.tokensIn}/${result.tokensOut} latency=${result.latencyMs} questions=${questionCount}`,
+    );
+    await this.extractions.create({
+      groupId: group.id,
+      coupleId: group.coupleId,
+      model: result.model,
+      promptVersion: NORMALIZATION_PROMPT_V1.version,
+      tokensIn: result.tokensIn,
+      tokensOut: result.tokensOut,
+      latencyMs: result.latencyMs,
+      status: RECEIPT_EXTRACTION_STATUS.SUCCEEDED,
+      attempt: 1,
+      rawJson: null,
+      confidence: null,
+      error: null,
+    });
+  }
+
+  private async recordNormalizationFailure(
+    group: ReceiptGroup,
+    message: string,
+    error: unknown,
+  ): Promise<void> {
+    const usage = hasLlmUsage(error) ? error.usage : undefined;
+    await this.extractions.create({
+      groupId: group.id,
+      coupleId: group.coupleId,
+      model: usage?.model ?? this.config.normalizationModel,
+      promptVersion: NORMALIZATION_PROMPT_V1.version,
+      tokensIn: usage?.tokensIn ?? 0,
+      tokensOut: usage?.tokensOut ?? 0,
+      latencyMs: usage?.latencyMs ?? 0,
+      status: RECEIPT_EXTRACTION_STATUS.FAILED,
+      attempt: 1,
+      rawJson: null,
+      confidence: null,
+      error: message,
+    });
   }
 
   private async resolveMerchantDecision(
@@ -429,6 +556,7 @@ export class NormalizationService {
         candidate.id,
         pending.canonicalRaw,
         candidate.canonicalName,
+        pending.rut,
       );
       return 'matched';
     }

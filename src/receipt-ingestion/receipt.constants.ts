@@ -75,7 +75,10 @@ export const RECEIPT_DEFAULTS = {
   matchHigh: 0.6,
   matchLow: 0.3,
   candidateLimit: 5,
-  normalizationMaxOutputTokens: 600,
+  normalizationMaxOutputTokens: 2000,
+  normalizationTimeoutMs: 30000,
+  normalizationReasoningEffort: 'minimal',
+  extractionTemperature: 0,
   sweepIntervalMinutes: 10,
   staleExtractingMinutes: 30,
 } as const;
@@ -121,3 +124,8 @@ export const RECEIPT_PROMPT_VERSION_V1 = 'v1';
 export const RECEIPT_PERIOD_TIME_ZONE = 'America/Santiago';
 
 export const RECEIPT_NORMALIZATION_PROMPT_VERSION_V1 = 'norm-v1';
+
+export const MERCHANT_DECISION_KEY = 'merchant';
+
+export const NORMALIZATION_BASE_OUTPUT_TOKENS = 200;
+export const NORMALIZATION_TOKENS_PER_QUESTION = 60;

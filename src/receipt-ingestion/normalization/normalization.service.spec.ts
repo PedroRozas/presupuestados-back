@@ -3,6 +3,7 @@ import type { ReceiptGroupsRepository } from '../repository/receipt-groups.repos
 import type { ReceiptItemsRepository } from '../repository/receipt-items.repository.js';
 import type { ReceiptProductsRepository } from '../repository/receipt-products.repository.js';
 import type { ReceiptMerchantsRepository } from '../repository/receipt-merchants.repository.js';
+import type { ReceiptExtractionsRepository } from '../repository/receipt-extractions.repository.js';
 import type { LlmNormalizationProvider } from '../llm/llm.interfaces.js';
 import type { ReceiptConfigService } from '../receipt.config.js';
 import type {
@@ -91,6 +92,12 @@ const build = (options: BuildOptions) => {
         }),
     ),
     addAlias: jest.fn(() => Promise.resolve()),
+    setRut: jest.fn(() => Promise.resolve()),
+  };
+  const extractions = {
+    create: jest.fn(() =>
+      Promise.resolve({ id: 'extraction-1' } as unknown as never),
+    ),
   };
   const provider = {
     chooseCandidates: jest.fn(() =>
@@ -112,7 +119,8 @@ const build = (options: BuildOptions) => {
     matchLow: 0.3,
     candidateLimit: 5,
     normalizationMaxOutputTokens: 600,
-    extractionTimeoutMs: 90000,
+    normalizationTimeoutMs: 30000,
+    normalizationModel: 'test-model',
   } as ReceiptConfigService;
 
   const service = new NormalizationService(
@@ -120,11 +128,12 @@ const build = (options: BuildOptions) => {
     items as unknown as ReceiptItemsRepository,
     products as unknown as ReceiptProductsRepository,
     merchants as unknown as ReceiptMerchantsRepository,
+    extractions as unknown as ReceiptExtractionsRepository,
     provider as unknown as LlmNormalizationProvider,
     config,
   );
 
-  return { service, groups, items, products, merchants, provider };
+  return { service, groups, items, products, merchants, extractions, provider };
 };
 
 describe('NormalizationService.normalizeGroup', () => {
@@ -170,7 +179,7 @@ describe('NormalizationService.normalizeGroup', () => {
     });
   });
 
-  it('resuelve merchant por rut existente sin trigram ni LLM', async () => {
+  it('resuelve merchant por rut existente sin trigram ni LLM, normalizando el rut para la búsqueda', async () => {
     const { service, merchants, groups, provider } = build({
       group: group({
         merchantRaw: 'Jumbo Providencia',
@@ -181,23 +190,41 @@ describe('NormalizationService.normalizeGroup', () => {
         id: 'm1',
         coupleId: 'c1',
         canonicalName: 'JUMBO PROVIDENCIA',
-        rut: '76.123.456-7',
+        rut: '761234567',
         aliases: [],
       } as ReceiptMerchant,
     });
 
     const result = await service.normalizeGroup(input);
 
-    expect(merchants.findByRut).toHaveBeenCalledWith('c1', '76.123.456-7');
+    expect(merchants.findByRut).toHaveBeenCalledWith('c1', '761234567');
     expect(merchants.findCandidates).not.toHaveBeenCalled();
     expect(groups.setMerchant).toHaveBeenCalledWith('g1', 'm1');
     expect(merchants.addAlias).not.toHaveBeenCalled();
+    expect(merchants.setRut).toHaveBeenCalledWith('m1', '761234567');
     expect(provider.chooseCandidates).not.toHaveBeenCalled();
     expect(result).toEqual({
       outcome: 'normalized',
       merchant: 'matched',
       items: { matched: 0, created: 0, llmDecided: 0 },
     });
+  });
+
+  it('rellena el rut de un merchant existente resuelto por trigram', async () => {
+    const { service, merchants } = build({
+      group: group({
+        merchantRaw: 'Jumbo Providencia',
+        merchantRut: '76.123.456-7',
+      }),
+      items: [],
+      merchantCandidates: [
+        { id: 'm1', canonicalName: 'JUMBO PROVIDENCIA', score: 0.9 },
+      ],
+    });
+
+    await service.normalizeGroup(input);
+
+    expect(merchants.setRut).toHaveBeenCalledWith('m1', '761234567');
   });
 
   it('omite el merchant ya asignado sin llamar a repositorio ni LLM', async () => {
@@ -224,8 +251,25 @@ describe('NormalizationService.normalizeGroup', () => {
     });
   });
 
-  it('resuelve un ítem ambiguo con una llamada al LLM que devuelve un candidato', async () => {
-    const { service, provider, items, products } = build({
+  it('omite un merchant cuyo texto canónico queda vacío sin buscar candidatos ni crear', async () => {
+    const { service, merchants, groups } = build({
+      group: group({ merchantRaw: '  ' }),
+      items: [],
+    });
+
+    const result = await service.normalizeGroup(input);
+
+    expect(merchants.findCandidates).not.toHaveBeenCalled();
+    expect(merchants.create).not.toHaveBeenCalled();
+    expect(groups.setMerchant).not.toHaveBeenCalled();
+    expect(result.outcome).toBe('normalized');
+    if (result.outcome === 'normalized') {
+      expect(result.merchant).toBe('none');
+    }
+  });
+
+  it('resuelve un ítem ambiguo con una llamada al LLM que devuelve un candidato y registra el gasto', async () => {
+    const { service, provider, items, products, extractions } = build({
       group: group(),
       items: [item({ id: 'i1', descriptionRaw: 'Yogur Sabor Frutilla' })],
       productCandidatesByText: {
@@ -250,6 +294,18 @@ describe('NormalizationService.normalizeGroup', () => {
     expect(products.addAlias).toHaveBeenCalledWith(
       'p9',
       'YOGUR SABOR FRUTILLA',
+    );
+    expect(extractions.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        groupId: 'g1',
+        coupleId: 'c1',
+        promptVersion: 'norm-v1',
+        model: 'test-model',
+        tokensIn: 10,
+        tokensOut: 5,
+        latencyMs: 100,
+        status: 'succeeded',
+      }),
     );
     expect(result).toEqual({
       outcome: 'normalized',
@@ -288,6 +344,101 @@ describe('NormalizationService.normalizeGroup', () => {
       outcome: 'normalized',
       merchant: 'none',
       items: { matched: 0, created: 1, llmDecided: 1 },
+    });
+  });
+
+  it('crea un producto nuevo cuando la respuesta del LLM no incluye la key del ítem', async () => {
+    const { service, provider, items, products } = build({
+      group: group(),
+      items: [item({ id: 'i1', descriptionRaw: 'Yogur Sabor Frutilla' })],
+      productCandidatesByText: {
+        'YOGUR SABOR FRUTILLA': [
+          { id: 'p9', canonicalName: 'YOGUR FRUTILLA', score: 0.45 },
+        ],
+      },
+      chooseCandidatesResult: { decisions: [] },
+    });
+
+    const result = await service.normalizeGroup(input);
+
+    expect(provider.chooseCandidates).toHaveBeenCalledTimes(1);
+    expect(products.create).toHaveBeenCalledWith(
+      'c1',
+      'YOGUR SABOR FRUTILLA',
+      'lacteos_huevos',
+    );
+    expect(items.setProduct).toHaveBeenCalledWith(
+      'i1',
+      'product-YOGUR SABOR FRUTILLA',
+    );
+    expect(result).toEqual({
+      outcome: 'normalized',
+      merchant: 'none',
+      items: { matched: 0, created: 1, llmDecided: 1 },
+    });
+  });
+
+  it('crea un producto nuevo cuando el candidate_id del LLM no corresponde a ningún candidato', async () => {
+    const { service, provider, items, products } = build({
+      group: group(),
+      items: [item({ id: 'i1', descriptionRaw: 'Yogur Sabor Frutilla' })],
+      productCandidatesByText: {
+        'YOGUR SABOR FRUTILLA': [
+          { id: 'p9', canonicalName: 'YOGUR FRUTILLA', score: 0.45 },
+        ],
+      },
+      chooseCandidatesResult: {
+        decisions: [{ key: 'i1', candidate_id: 'no-existe' }],
+      },
+    });
+
+    const result = await service.normalizeGroup(input);
+
+    expect(provider.chooseCandidates).toHaveBeenCalledTimes(1);
+    expect(products.create).toHaveBeenCalledWith(
+      'c1',
+      'YOGUR SABOR FRUTILLA',
+      'lacteos_huevos',
+    );
+    expect(items.setProduct).toHaveBeenCalledWith(
+      'i1',
+      'product-YOGUR SABOR FRUTILLA',
+    );
+    expect(result).toEqual({
+      outcome: 'normalized',
+      merchant: 'none',
+      items: { matched: 0, created: 1, llmDecided: 1 },
+    });
+  });
+
+  it('resuelve un merchant ambiguo con una llamada al LLM que devuelve un candidato', async () => {
+    const { service, provider, merchants, groups } = build({
+      group: group({ merchantRaw: 'Jumbo Nueva Providencia' }),
+      items: [],
+      merchantCandidates: [
+        { id: 'm9', canonicalName: 'JUMBO PROVIDENCIA', score: 0.45 },
+      ],
+      chooseCandidatesResult: {
+        decisions: [{ key: 'merchant', candidate_id: 'm9' }],
+      },
+    });
+
+    const result = await service.normalizeGroup(input);
+
+    expect(provider.chooseCandidates).toHaveBeenCalledTimes(1);
+    const call = firstCallArg<{ questions: { key: string }[] }>(
+      provider.chooseCandidates,
+    );
+    expect(call.questions[0]?.key).toBe('merchant');
+    expect(groups.setMerchant).toHaveBeenCalledWith('g1', 'm9');
+    expect(merchants.addAlias).toHaveBeenCalledWith(
+      'm9',
+      'JUMBO NUEVA PROVIDENCIA',
+    );
+    expect(result).toEqual({
+      outcome: 'normalized',
+      merchant: 'matched',
+      items: { matched: 0, created: 0, llmDecided: 0 },
     });
   });
 
@@ -340,6 +491,24 @@ describe('NormalizationService.normalizeGroup', () => {
     });
   });
 
+  it('omite un ítem cuyo texto canónico queda vacío sin buscar candidatos ni crear', async () => {
+    const { service, products, items } = build({
+      group: group(),
+      items: [item({ id: 'i1', descriptionRaw: '   ' })],
+    });
+
+    const result = await service.normalizeGroup(input);
+
+    expect(products.findCandidates).not.toHaveBeenCalled();
+    expect(products.create).not.toHaveBeenCalled();
+    expect(items.setProduct).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      outcome: 'normalized',
+      merchant: 'none',
+      items: { matched: 0, created: 0, llmDecided: 0 },
+    });
+  });
+
   it('omite grupos en extracting como not_extracted y de otra pareja como not_found', async () => {
     await expect(
       build({ group: group({ status: 'extracting' }) }).service.normalizeGroup(
@@ -354,12 +523,23 @@ describe('NormalizationService.normalizeGroup', () => {
     ).resolves.toEqual({ outcome: 'skipped', reason: 'not_found' });
   });
 
-  it('propaga el error del proveedor dejando los setProduct por trigram ya realizados', async () => {
-    const { service, items, provider } = build({
-      group: group(),
+  it('degrada creando productos y merchant nuevos cuando el proveedor falla, sin lanzar', async () => {
+    const {
+      service,
+      items,
+      products,
+      merchants,
+      groups,
+      provider,
+      extractions,
+    } = build({
+      group: group({ merchantRaw: 'Jumbo Nueva Providencia' }),
       items: [
         item({ id: 'i1', descriptionRaw: 'Leche Full 1L' }),
         item({ id: 'i2', descriptionRaw: 'Yogur Sabor Frutilla' }),
+      ],
+      merchantCandidates: [
+        { id: 'm9', canonicalName: 'JUMBO PROVIDENCIA', score: 0.45 },
       ],
       productCandidatesByText: {
         'LECHE FULL 1L': [{ id: 'p1', canonicalName: 'LECHE', score: 0.9 }],
@@ -370,9 +550,41 @@ describe('NormalizationService.normalizeGroup', () => {
       providerError: new Error('llm_timeout'),
     });
 
-    await expect(service.normalizeGroup(input)).rejects.toThrow('llm_timeout');
+    const result = await service.normalizeGroup(input);
+
     expect(provider.chooseCandidates).toHaveBeenCalledTimes(1);
     expect(items.setProduct).toHaveBeenCalledWith('i1', 'p1');
-    expect(items.setProduct).not.toHaveBeenCalledWith('i2', expect.anything());
+    expect(products.create).toHaveBeenCalledWith(
+      'c1',
+      'YOGUR SABOR FRUTILLA',
+      'lacteos_huevos',
+    );
+    expect(items.setProduct).toHaveBeenCalledWith(
+      'i2',
+      'product-YOGUR SABOR FRUTILLA',
+    );
+    expect(merchants.create).toHaveBeenCalledWith(
+      'c1',
+      'JUMBO NUEVA PROVIDENCIA',
+      null,
+    );
+    expect(groups.setMerchant).toHaveBeenCalledWith(
+      'g1',
+      'merchant-JUMBO NUEVA PROVIDENCIA',
+    );
+    expect(extractions.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        groupId: 'g1',
+        coupleId: 'c1',
+        promptVersion: 'norm-v1',
+        status: 'failed',
+        error: 'llm_timeout',
+      }),
+    );
+    expect(result).toEqual({
+      outcome: 'normalized',
+      merchant: 'created',
+      items: { matched: 1, created: 1, llmDecided: 1 },
+    });
   });
 });
