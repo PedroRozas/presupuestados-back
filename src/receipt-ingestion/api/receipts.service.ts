@@ -11,6 +11,7 @@ import type {
   ReceiptItem,
 } from '../../database/schema/index.js';
 import { toCanonicalName } from '../normalization/canonical-name.js';
+import type { ReceiptGroupStatus } from '../receipt.constants.js';
 import { ReceiptQueueService } from '../queue/receipt-queue.service.js';
 import { ReceiptConfigService } from '../receipt.config.js';
 import { AllowedSendersRepository } from '../repository/allowed-senders.repository.js';
@@ -27,7 +28,10 @@ import type {
   ReplaceItemDto,
   ReplaceItemsDto,
 } from './dto/replace-items.dto.js';
-import type { UpdateGroupDto } from './dto/update-group.dto.js';
+import type {
+  UpdatableGroupStatus,
+  UpdateGroupDto,
+} from './dto/update-group.dto.js';
 import { recalculateReview } from './receipt-review-recalc.js';
 import {
   mapDetail,
@@ -41,10 +45,10 @@ import {
 } from './receipts.mappers.js';
 
 const FIRST_POSITION = 1;
-const EDITABLE_STATUSES: ReadonlySet<string> = new Set([
-  'ready',
-  'needs_review',
-]);
+const EDITABLE_STATUSES: ReadonlySet<ReceiptGroupStatus> =
+  new Set<ReceiptGroupStatus>(['ready', 'needs_review']);
+const DISCARDABLE_STATUSES: ReadonlySet<ReceiptGroupStatus> =
+  new Set<ReceiptGroupStatus>(['failed']);
 
 const toNumericString = (value: number | null | undefined): string | null =>
   value === null || value === undefined ? null : String(value);
@@ -118,7 +122,7 @@ export class ReceiptsService {
   ): Promise<ReceiptGroupDetailDto> {
     const group = await this.requireGroup(coupleId, groupId);
     this.assertEditable(group, dto.status);
-    await this.groups.updateHeader(group.id, this.toHeaderPatch(dto));
+    await this.groups.updateHeader(group.id, this.toHeaderPatch(dto, group));
     if (dto.status) {
       await this.groups.setStatusAndReasons(group.id, dto.status, []);
     } else {
@@ -179,18 +183,33 @@ export class ReceiptsService {
     return group;
   }
 
-  private assertEditable(group: ReceiptGroup, nextStatus?: string): void {
+  private assertEditable(
+    group: ReceiptGroup,
+    nextStatus?: UpdatableGroupStatus,
+  ): void {
     if (EDITABLE_STATUSES.has(group.status)) return;
     if (group.status === 'discarded' && nextStatus === 'ready') return;
+    if (DISCARDABLE_STATUSES.has(group.status) && nextStatus === 'discarded') {
+      return;
+    }
     throw new ConflictException(
       `La boleta no se puede editar en estado ${group.status}`,
     );
   }
 
-  private toHeaderPatch(dto: UpdateGroupDto): ReceiptGroupHeaderPatch {
+  private toHeaderPatch(
+    dto: UpdateGroupDto,
+    group: ReceiptGroup,
+  ): ReceiptGroupHeaderPatch {
     const patch: ReceiptGroupHeaderPatch = {};
     if (dto.receiptDate !== undefined) patch.receiptDate = dto.receiptDate;
-    if (dto.merchantRaw !== undefined) patch.merchantRaw = dto.merchantRaw;
+    if (
+      dto.merchantRaw !== undefined &&
+      dto.merchantRaw !== group.merchantRaw
+    ) {
+      patch.merchantRaw = dto.merchantRaw;
+      patch.merchantId = null;
+    }
     if (dto.totalDeclared !== undefined) {
       patch.totalDeclared = toNumericString(dto.totalDeclared);
     }

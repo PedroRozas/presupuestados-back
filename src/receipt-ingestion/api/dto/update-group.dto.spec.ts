@@ -21,6 +21,17 @@ describe('UpdateGroupDto', () => {
     expect(errors.some((e) => e.property === 'receiptDate')).toBe(true);
   });
 
+  it('rechaza un receiptDate con formato válido pero fecha inexistente', async () => {
+    const dto = plainToInstance(UpdateGroupDto, { receiptDate: '2026-13-45' });
+    const errors = await validate(dto);
+    expect(errors.some((e) => e.property === 'receiptDate')).toBe(true);
+  });
+
+  it('acepta un receiptDate real', async () => {
+    const dto = plainToInstance(UpdateGroupDto, { receiptDate: '2026-09-01' });
+    expect(await validate(dto)).toHaveLength(0);
+  });
+
   it('rechaza merchantRaw más largo que 200 caracteres', async () => {
     const dto = plainToInstance(UpdateGroupDto, {
       merchantRaw: 'a'.repeat(201),

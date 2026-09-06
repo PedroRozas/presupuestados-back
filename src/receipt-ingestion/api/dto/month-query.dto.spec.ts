@@ -24,6 +24,15 @@ describe('MonthQueryDto', () => {
     expect(errors.some((e) => e.property === 'month')).toBe(true);
   });
 
+  it('rechaza un año mayor a 2100', async () => {
+    const dto = plainToInstance(MonthQueryDto, {
+      month: '9',
+      year: '99999999',
+    });
+    const errors = await validate(dto);
+    expect(errors.some((e) => e.property === 'year')).toBe(true);
+  });
+
   it('rechaza un año menor a 2000', async () => {
     const dto = plainToInstance(MonthQueryDto, { month: '9', year: '1999' });
     const errors = await validate(dto);

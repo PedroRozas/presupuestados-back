@@ -246,12 +246,29 @@ describe('ReceiptsService', () => {
     await service.updateHeader('c1', 'g1', { merchantRaw: 'LIDER' });
     expect(groups.updateHeader).toHaveBeenCalledWith('g1', {
       merchantRaw: 'LIDER',
+      merchantId: null,
     });
     expect(groups.setStatusAndReasons).toHaveBeenCalledWith(
       'g1',
       'needs_review',
       ['total_mismatch'],
     );
+  });
+
+  it('conserva el comercio normalizado cuando merchantRaw no cambia', async () => {
+    const { service, groups } = build({});
+    await service.updateHeader('c1', 'g1', { merchantRaw: 'JUMBO' });
+    expect(groups.updateHeader).toHaveBeenCalledWith('g1', {});
+  });
+
+  it('permite descartar una boleta fallida pero no editarla', async () => {
+    const failed = build({ group: group({ status: 'failed' }) });
+    await expect(
+      failed.service.updateHeader('c1', 'g1', { merchantRaw: 'X' }),
+    ).rejects.toBeInstanceOf(ConflictException);
+    await expect(
+      failed.service.updateHeader('c1', 'g1', { status: 'discarded' }),
+    ).resolves.toBeDefined();
   });
 
   it('rechaza editar una boleta descartada salvo para reabrirla', async () => {

@@ -34,6 +34,7 @@ export interface ExtractionHeader {
 export interface ReceiptGroupHeaderPatch {
   receiptDate?: string | null;
   merchantRaw?: string | null;
+  merchantId?: string | null;
   totalDeclared?: string | null;
 }
 

@@ -1,4 +1,5 @@
 import {
+  IsDateString,
   IsIn,
   IsInt,
   IsOptional,
@@ -17,6 +18,7 @@ export type UpdatableGroupStatus = (typeof UPDATABLE_GROUP_STATUSES)[number];
 export class UpdateGroupDto {
   @IsOptional()
   @Matches(RECEIPT_DATE_PATTERN)
+  @IsDateString({ strict: true })
   receiptDate?: string | null;
 
   @IsOptional()
