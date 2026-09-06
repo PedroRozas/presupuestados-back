@@ -8,7 +8,10 @@ import { Worker, type Job } from 'bullmq';
 import type IORedis from 'ioredis';
 import { ReceiptConfigService } from '../receipt.config.js';
 import { RECEIPT_JOB, RECEIPT_QUEUE_NAME } from '../receipt.constants.js';
-import { createReceiptRedisConnection } from './receipt-queue.service.js';
+import {
+  createReceiptRedisConnection,
+  ReceiptQueueService,
+} from './receipt-queue.service.js';
 import type {
   CloseGroupJobPayload,
   ExtractGroupJobPayload,
@@ -21,6 +24,7 @@ import { CloseGroupProcessor } from './processors/close-group.processor.js';
 import { NotifyUserProcessor } from './processors/notify-user.processor.js';
 import { ExtractGroupProcessor } from './processors/extract-group.processor.js';
 import { NormalizeGroupProcessor } from './processors/normalize-group.processor.js';
+import { StaleGroupSweeperService } from '../groups/stale-group-sweeper.service.js';
 
 export class UnknownReceiptJobError extends Error {
   constructor(name: string) {
@@ -37,14 +41,16 @@ export class ReceiptWorkerService implements OnModuleInit, OnModuleDestroy {
 
   constructor(
     private readonly config: ReceiptConfigService,
+    private readonly queue: ReceiptQueueService,
     private readonly ingestImage: IngestImageProcessor,
     private readonly closeGroup: CloseGroupProcessor,
     private readonly notifyUser: NotifyUserProcessor,
     private readonly extractGroup: ExtractGroupProcessor,
     private readonly normalizeGroup: NormalizeGroupProcessor,
+    private readonly staleGroupSweeper: StaleGroupSweeperService,
   ) {}
 
-  onModuleInit(): void {
+  async onModuleInit(): Promise<void> {
     if (!this.config.workerEnabled) {
       this.logger.log('receipt_worker_disabled');
       return;
@@ -62,6 +68,7 @@ export class ReceiptWorkerService implements OnModuleInit, OnModuleDestroy {
       concurrency: this.config.workerConcurrency,
     });
     this.registerFailureHandler(this.worker);
+    await this.queue.ensureSweepScheduler();
     this.logger.log('receipt_worker_started');
   }
 
@@ -115,6 +122,8 @@ export class ReceiptWorkerService implements OnModuleInit, OnModuleDestroy {
         return this.normalizeGroup.process(
           job.data as NormalizeGroupJobPayload,
         );
+      case RECEIPT_JOB.SWEEP_STALE_GROUPS:
+        return this.staleGroupSweeper.sweep();
       default:
         throw new UnknownReceiptJobError(job.name);
     }

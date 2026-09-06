@@ -101,6 +101,7 @@ export class OpenAiLlmProvider
       input.maxOutputTokens,
       input.schemaName,
       input.outputJsonSchema,
+      TEMPERATURE,
     );
     return this.call(params, input.timeoutMs, this.config.extractionModel);
   }
@@ -127,13 +128,14 @@ export class OpenAiLlmProvider
     maxOutputTokens: number,
     schemaName: string,
     schema: Record<string, unknown>,
+    temperature?: number,
   ): Record<string, unknown> {
     return {
       model,
       instructions: systemPrompt,
       input: [{ role: 'user', content }],
       max_output_tokens: maxOutputTokens,
-      temperature: TEMPERATURE,
+      ...(temperature === undefined ? {} : { temperature }),
       store: false,
       text: {
         format: {

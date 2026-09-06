@@ -21,6 +21,7 @@ import { NormalizeGroupProcessor } from './queue/processors/normalize-group.proc
 import { ImageProcessorService } from './media/image-processor.service.js';
 import { ReceiptStorageService } from './storage/receipt-storage.service.js';
 import { ReceiptGroupService } from './groups/receipt-group.service.js';
+import { StaleGroupSweeperService } from './groups/stale-group-sweeper.service.js';
 import { ExtractionService } from './extraction/extraction.service.js';
 import { ExtractionUsageRepository } from './extraction/extraction-usage.repository.js';
 import { NormalizationService } from './normalization/normalization.service.js';
@@ -60,6 +61,7 @@ import { LocalWhatsAppMessagingClient } from './whatsapp/local-whatsapp-messagin
     ImageProcessorService,
     ReceiptStorageService,
     ReceiptGroupService,
+    StaleGroupSweeperService,
     ExtractionService,
     ExtractionUsageRepository,
     NormalizationService,

@@ -62,6 +62,7 @@ describe('OpenAiLlmProvider', () => {
     expect(params['model']).toBe('test-model');
     expect(params['instructions']).toBe('sys');
     expect(params['max_output_tokens']).toBe(500);
+    expect(params['temperature']).toBe(0);
     expect(params['store']).toBe(false);
     expect(params['text']).toEqual({
       format: {
@@ -148,6 +149,7 @@ describe('OpenAiLlmProvider', () => {
     expect(params['model']).toBe('small-model');
     expect(params['instructions']).toBe('sys-n');
     expect(params['max_output_tokens']).toBe(600);
+    expect(params).not.toHaveProperty('temperature');
     expect(params['input']).toEqual([
       { role: 'user', content: [{ type: 'input_text', text: 'user-n' }] },
     ]);

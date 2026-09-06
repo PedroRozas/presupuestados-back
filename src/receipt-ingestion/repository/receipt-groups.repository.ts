@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, lt } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { DRIZZLE } from '../../database/database.module.js';
 import * as schema from '../../database/schema/index.js';
@@ -134,5 +134,29 @@ export class ReceiptGroupsRepository {
       .update(receiptGroups)
       .set({ merchantId })
       .where(eq(receiptGroups.id, groupId));
+  }
+
+  async findStaleExtracting(olderThan: Date): Promise<ReceiptGroup[]> {
+    return this.db
+      .select()
+      .from(receiptGroups)
+      .where(
+        and(
+          eq(receiptGroups.status, 'extracting'),
+          lt(receiptGroups.closedAt, olderThan),
+        ),
+      );
+  }
+
+  async findStaleCollecting(olderThan: Date): Promise<ReceiptGroup[]> {
+    return this.db
+      .select()
+      .from(receiptGroups)
+      .where(
+        and(
+          eq(receiptGroups.status, 'collecting'),
+          lt(receiptGroups.lastImageAt, olderThan),
+        ),
+      );
   }
 }

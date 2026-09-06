@@ -31,6 +31,8 @@ export class ReceiptQueueUnavailableError extends Error {
   }
 }
 
+const MILLISECONDS_PER_MINUTE = 60000;
+
 const stripPlus = (phoneE164: string): string => phoneE164.replace(/^\+/, '');
 
 export const buildCloseGroupJobId = (payload: CloseGroupJobPayload): string => {
@@ -99,6 +101,17 @@ export class ReceiptQueueService implements OnModuleDestroy {
   ): Promise<void> {
     await this.getQueue().add(RECEIPT_JOB.NORMALIZE_GROUP, payload);
     this.logger.log(`job_enqueued name=${RECEIPT_JOB.NORMALIZE_GROUP}`);
+  }
+
+  async ensureSweepScheduler(): Promise<void> {
+    const intervalMs =
+      this.config.sweepIntervalMinutes * MILLISECONDS_PER_MINUTE;
+    await this.getQueue().upsertJobScheduler(
+      RECEIPT_JOB.SWEEP_STALE_GROUPS,
+      { every: intervalMs },
+      { name: RECEIPT_JOB.SWEEP_STALE_GROUPS },
+    );
+    this.logger.log(`sweep_scheduler_registered intervalMs=${intervalMs}`);
   }
 
   async onModuleDestroy(): Promise<void> {

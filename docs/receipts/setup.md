@@ -60,6 +60,13 @@ Variables de la normalización con LLM:
 
 `OPENAI_API_KEY` es obligatoria para que la extracción funcione.
 
+Variables del barrido de grupos huérfanos:
+
+- `RECEIPT_SWEEP_INTERVAL_MINUTES`: cada cuántos minutos corre el barrido (job programado `sweep-stale-groups`).
+- `RECEIPT_STALE_EXTRACTING_MINUTES`: minutos desde que un grupo quedó en `extracting` (columna `closed_at`) antes de reencolar su extracción.
+
+El barrido reencola `extract-group` para grupos `extracting` cuya extracción nunca llegó a encolarse o se perdió (el proceso murió entre marcar el grupo y encolar el job), y encola un `close-group` por ventana para grupos `collecting` cuyo `last_image_at` supera el doble de `RECEIPT_GROUP_WINDOW_SECONDS` sin haber recibido el cierre programado. Ambos casos son idempotentes: el procesador de extracción exige que el grupo siga en `extracting`, y el de cierre recalcula la página máxima antes de decidir.
+
 ## 5. Prueba local sin Meta
 
 1. `RECEIPT_MEDIA_SOURCE=local` y `RECEIPT_LOCAL_MEDIA_DIR=./tmp/receipt-media` en `.env`.

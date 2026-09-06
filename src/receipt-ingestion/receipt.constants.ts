@@ -6,6 +6,7 @@ export const RECEIPT_JOB = {
   NOTIFY_USER: 'notify-user',
   EXTRACT_GROUP: 'extract-group',
   NORMALIZE_GROUP: 'normalize-group',
+  SWEEP_STALE_GROUPS: 'sweep-stale-groups',
 } as const;
 
 export type ReceiptJobName = (typeof RECEIPT_JOB)[keyof typeof RECEIPT_JOB];
@@ -75,6 +76,8 @@ export const RECEIPT_DEFAULTS = {
   matchLow: 0.3,
   candidateLimit: 5,
   normalizationMaxOutputTokens: 600,
+  sweepIntervalMinutes: 10,
+  staleExtractingMinutes: 30,
 } as const;
 
 export const RECEIPT_IMAGE_CONTENT_TYPE = 'image/webp';

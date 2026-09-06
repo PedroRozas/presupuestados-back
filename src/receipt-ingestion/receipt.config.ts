@@ -204,6 +204,20 @@ export class ReceiptConfigService {
     );
   }
 
+  get sweepIntervalMinutes(): number {
+    return this.getNumber(
+      'RECEIPT_SWEEP_INTERVAL_MINUTES',
+      RECEIPT_DEFAULTS.sweepIntervalMinutes,
+    );
+  }
+
+  get staleExtractingMinutes(): number {
+    return this.getNumber(
+      'RECEIPT_STALE_EXTRACTING_MINUTES',
+      RECEIPT_DEFAULTS.staleExtractingMinutes,
+    );
+  }
+
   private getString(key: string, fallback: string): string {
     const value = this.configService.get<string>(key);
     return value && value.length > 0 ? value : fallback;
