@@ -21,6 +21,9 @@ import { CloseGroupProcessor } from './queue/processors/close-group.processor.js
 import { NotifyUserProcessor } from './queue/processors/notify-user.processor.js';
 import { ExtractGroupProcessor } from './queue/processors/extract-group.processor.js';
 import { NormalizeGroupProcessor } from './queue/processors/normalize-group.processor.js';
+import { AnswerQueryProcessor } from './queue/processors/answer-query.processor.js';
+import { ReceiptQueryTools } from './query/receipt-query-tools.js';
+import { ReceiptQueryService } from './query/receipt-query.service.js';
 import { ImageProcessorService } from './media/image-processor.service.js';
 import { ReceiptStorageService } from './storage/receipt-storage.service.js';
 import { ReceiptGroupService } from './groups/receipt-group.service.js';
@@ -31,6 +34,7 @@ import { NormalizationService } from './normalization/normalization.service.js';
 import {
   LLM_EXTRACTION_PROVIDER,
   LLM_NORMALIZATION_PROVIDER,
+  LLM_QUERY_PROVIDER,
 } from './llm/llm.interfaces.js';
 import { OpenAiLlmProvider } from './llm/openai-llm.provider.js';
 import { WHATSAPP_MEDIA_CLIENT } from './whatsapp/whatsapp-media.client.js';
@@ -63,6 +67,9 @@ import { LocalWhatsAppMessagingClient } from './whatsapp/local-whatsapp-messagin
     NotifyUserProcessor,
     ExtractGroupProcessor,
     NormalizeGroupProcessor,
+    AnswerQueryProcessor,
+    ReceiptQueryTools,
+    ReceiptQueryService,
     ImageProcessorService,
     ReceiptStorageService,
     ReceiptGroupService,
@@ -73,6 +80,7 @@ import { LocalWhatsAppMessagingClient } from './whatsapp/local-whatsapp-messagin
     OpenAiLlmProvider,
     { provide: LLM_EXTRACTION_PROVIDER, useExisting: OpenAiLlmProvider },
     { provide: LLM_NORMALIZATION_PROVIDER, useExisting: OpenAiLlmProvider },
+    { provide: LLM_QUERY_PROVIDER, useExisting: OpenAiLlmProvider },
     {
       provide: WHATSAPP_MEDIA_CLIENT,
       inject: [ReceiptConfigService],

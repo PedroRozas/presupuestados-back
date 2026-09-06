@@ -64,7 +64,9 @@ export class WebhookDispatchService {
     }
     if (isCloseCommand(message.body)) {
       await this.enqueueCloseCommand(message, sender);
+      return;
     }
+    await this.enqueueQuery(message, sender);
   }
 
   private async isWithinRateLimit(phoneE164: string): Promise<boolean> {
@@ -88,6 +90,18 @@ export class WebhookDispatchService {
       senderUserId: sender.userId,
       coupleId: sender.coupleId,
       receivedAtIso: message.receivedAt.toISOString(),
+    });
+  }
+
+  private async enqueueQuery(
+    message: IncomingTextMessage,
+    sender: ReceiptAllowedSender,
+  ): Promise<void> {
+    if (message.body.trim().length === 0) return;
+    await this.queue.enqueueAnswerQuery({
+      senderPhoneE164: message.senderPhoneE164,
+      coupleId: sender.coupleId,
+      message: message.body,
     });
   }
 

@@ -11,6 +11,7 @@ import {
   RECEIPT_QUEUE_NAME,
 } from '../receipt.constants.js';
 import type {
+  AnswerQueryJobPayload,
   CloseGroupJobPayload,
   ExtractGroupJobPayload,
   IngestImageJobPayload,
@@ -101,6 +102,11 @@ export class ReceiptQueueService implements OnModuleDestroy {
   ): Promise<void> {
     await this.getQueue().add(RECEIPT_JOB.NORMALIZE_GROUP, payload);
     this.logger.log(`job_enqueued name=${RECEIPT_JOB.NORMALIZE_GROUP}`);
+  }
+
+  async enqueueAnswerQuery(payload: AnswerQueryJobPayload): Promise<void> {
+    await this.getQueue().add(RECEIPT_JOB.ANSWER_QUERY, payload);
+    this.logger.log(`job_enqueued name=${RECEIPT_JOB.ANSWER_QUERY}`);
   }
 
   async ensureSweepScheduler(): Promise<void> {

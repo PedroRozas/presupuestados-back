@@ -13,6 +13,7 @@ import {
   ReceiptQueueService,
 } from './receipt-queue.service.js';
 import type {
+  AnswerQueryJobPayload,
   CloseGroupJobPayload,
   ExtractGroupJobPayload,
   IngestImageJobPayload,
@@ -24,6 +25,7 @@ import { CloseGroupProcessor } from './processors/close-group.processor.js';
 import { NotifyUserProcessor } from './processors/notify-user.processor.js';
 import { ExtractGroupProcessor } from './processors/extract-group.processor.js';
 import { NormalizeGroupProcessor } from './processors/normalize-group.processor.js';
+import { AnswerQueryProcessor } from './processors/answer-query.processor.js';
 import { StaleGroupSweeperService } from '../groups/stale-group-sweeper.service.js';
 
 export class UnknownReceiptJobError extends Error {
@@ -52,6 +54,7 @@ export class ReceiptWorkerService implements OnModuleInit, OnModuleDestroy {
     private readonly notifyUser: NotifyUserProcessor,
     private readonly extractGroup: ExtractGroupProcessor,
     private readonly normalizeGroup: NormalizeGroupProcessor,
+    private readonly answerQuery: AnswerQueryProcessor,
     private readonly staleGroupSweeper: StaleGroupSweeperService,
   ) {}
 
@@ -135,6 +138,8 @@ export class ReceiptWorkerService implements OnModuleInit, OnModuleDestroy {
         );
       case RECEIPT_JOB.SWEEP_STALE_GROUPS:
         return this.staleGroupSweeper.sweep();
+      case RECEIPT_JOB.ANSWER_QUERY:
+        return this.answerQuery.process(job.data as AnswerQueryJobPayload);
       default:
         throw new UnknownReceiptJobError(job.name);
     }

@@ -61,6 +61,7 @@ describe('WebhookDispatchService', () => {
     const queue = {
       enqueueIngestImage: jest.fn(() => Promise.resolve()),
       enqueueCloseGroup: jest.fn(() => Promise.resolve()),
+      enqueueAnswerQuery: jest.fn(() => Promise.resolve()),
     };
     const redis = {
       incrementWithTtl: jest.fn(() =>
@@ -165,7 +166,7 @@ describe('WebhookDispatchService', () => {
     expect(queue.enqueueIngestImage).not.toHaveBeenCalled();
   });
 
-  it('no encola nada para un texto distinto de "listo"', async () => {
+  it('encola answer-query con el texto distinto de "listo"', async () => {
     const { service, queue } = buildService({
       sender: { userId: 'u1', coupleId: 'c1' },
     });
@@ -183,6 +184,11 @@ describe('WebhookDispatchService', () => {
     );
 
     expect(queue.enqueueCloseGroup).not.toHaveBeenCalled();
+    expect(queue.enqueueAnswerQuery).toHaveBeenCalledWith({
+      senderPhoneE164: `+${PHONE}`,
+      coupleId: 'c1',
+      message: 'hola',
+    });
   });
 });
 
