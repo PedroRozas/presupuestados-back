@@ -53,6 +53,46 @@ interface GroupListSqlRow {
   closed_at: Date | string | null;
 }
 
+export interface TopProductRow {
+  name: string;
+  amount: string;
+  itemCount: number;
+}
+
+export interface CategoryMonthSpendRow {
+  month: string;
+  amount: string;
+  itemCount: number;
+}
+
+export interface ItemSearchRow {
+  description: string;
+  productName: string | null;
+  amount: string;
+  receiptDate: string | null;
+  merchantName: string | null;
+}
+
+interface TopProductSqlRow {
+  name: string;
+  amount: string;
+  item_count: number;
+}
+
+interface CategoryMonthSpendSqlRow {
+  month: string;
+  amount: string;
+  item_count: number;
+}
+
+interface ItemSearchSqlRow {
+  description: string;
+  product_name: string | null;
+  amount: string;
+  receipt_date: string | null;
+  merchant_name: string | null;
+}
+
 interface CategorySummarySqlRow {
   category: string;
   amount: string;
@@ -102,6 +142,32 @@ export function mapCategorySummaryRow(
     amount: row.amount,
     itemCount: row.item_count,
   };
+}
+
+export function mapTopProductRow(row: TopProductSqlRow): TopProductRow {
+  return { name: row.name, amount: row.amount, itemCount: row.item_count };
+}
+
+export function mapCategoryMonthSpendRow(
+  row: CategoryMonthSpendSqlRow,
+): CategoryMonthSpendRow {
+  return { month: row.month, amount: row.amount, itemCount: row.item_count };
+}
+
+export function mapItemSearchRow(row: ItemSearchSqlRow): ItemSearchRow {
+  return {
+    description: row.description,
+    productName: row.product_name,
+    amount: row.amount,
+    receiptDate: row.receipt_date,
+    merchantName: row.merchant_name,
+  };
+}
+
+const LIKE_SPECIAL_CHARS = /[\\%_]/g;
+
+export function escapeLikePattern(text: string): string {
+  return text.replace(LIKE_SPECIAL_CHARS, (char) => `\\${char}`);
 }
 
 export function buildComparisonRows(
@@ -229,6 +295,91 @@ export class ReceiptQueryRepository {
       this.comparisonCategories(coupleId, months),
     ]);
     return buildComparisonRows(totals, categories);
+  }
+
+  async topProducts(
+    coupleId: string,
+    year: number,
+    month: number,
+    limit: number,
+  ): Promise<TopProductRow[]> {
+    const result = await this.db.execute(sql`
+      select
+        coalesce(p.canonical_name, i.description_raw) as name,
+        sum(i.amount) as amount,
+        count(*)::int as item_count
+      from receipt_items i
+      join receipt_groups g on g.id = i.group_id
+      left join receipt_products p on p.id = i.product_id
+      where g.couple_id = ${coupleId}
+        and g.status = 'ready'
+        and g.receipt_date >= make_date(${year}, ${month}, 1)
+        and g.receipt_date < make_date(${year}, ${month}, 1) + interval '1 month'
+      group by coalesce(p.canonical_name, i.description_raw)
+      order by amount desc, name
+      limit ${limit}
+    `);
+    return (result as unknown as { rows: TopProductSqlRow[] }).rows.map(
+      mapTopProductRow,
+    );
+  }
+
+  async categorySpend(
+    coupleId: string,
+    category: string,
+    from: string,
+    to: string,
+  ): Promise<CategoryMonthSpendRow[]> {
+    const result = await this.db.execute(sql`
+      select
+        to_char(date_trunc('month', g.receipt_date), 'YYYY-MM') as month,
+        sum(i.amount) as amount,
+        count(*)::int as item_count
+      from receipt_items i
+      join receipt_groups g on g.id = i.group_id
+      where g.couple_id = ${coupleId}
+        and g.status = 'ready'
+        and i.category = ${category}::receipt_product_category
+        and g.receipt_date >= ${from}::date
+        and g.receipt_date <= ${to}::date
+      group by date_trunc('month', g.receipt_date)
+      order by month
+    `);
+    return (result as unknown as { rows: CategoryMonthSpendSqlRow[] }).rows.map(
+      mapCategoryMonthSpendRow,
+    );
+  }
+
+  async searchItems(
+    coupleId: string,
+    text: string,
+    year: number,
+    month: number,
+    limit: number,
+  ): Promise<ItemSearchRow[]> {
+    const pattern = `%${escapeLikePattern(text)}%`;
+    const result = await this.db.execute(sql`
+      select
+        i.description_raw as description,
+        p.canonical_name as product_name,
+        i.amount,
+        g.receipt_date::text as receipt_date,
+        m.canonical_name as merchant_name
+      from receipt_items i
+      join receipt_groups g on g.id = i.group_id
+      left join receipt_products p on p.id = i.product_id
+      left join receipt_merchants m on m.id = g.merchant_id
+      where g.couple_id = ${coupleId}
+        and g.status = 'ready'
+        and g.receipt_date >= make_date(${year}, ${month}, 1)
+        and g.receipt_date < make_date(${year}, ${month}, 1) + interval '1 month'
+        and (i.description_raw ilike ${pattern} or p.canonical_name ilike ${pattern})
+      order by g.receipt_date desc, i.position
+      limit ${limit}
+    `);
+    return (result as unknown as { rows: ItemSearchSqlRow[] }).rows.map(
+      mapItemSearchRow,
+    );
   }
 
   private monthSeriesJoin(coupleId: string, months: number): SQL {

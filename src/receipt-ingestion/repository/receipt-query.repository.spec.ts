@@ -1,7 +1,10 @@
 import {
   buildComparisonRows,
+  escapeLikePattern,
   mapCategorySummaryRow,
   mapGroupListRow,
+  mapItemSearchRow,
+  mapTopProductRow,
 } from './receipt-query.repository.js';
 
 describe('mapGroupListRow', () => {
@@ -142,5 +145,40 @@ describe('buildComparisonRows', () => {
 
   it('devuelve un arreglo vacío cuando no hay meses', () => {
     expect(buildComparisonRows([], [])).toEqual([]);
+  });
+});
+
+describe('escapeLikePattern', () => {
+  it('escapa comodines y backslash para ilike', () => {
+    expect(escapeLikePattern('100% leche_entera \\ x')).toBe(
+      '100\\% leche\\_entera \\\\ x',
+    );
+  });
+
+  it('deja intacto un texto sin caracteres especiales', () => {
+    expect(escapeLikePattern('leche')).toBe('leche');
+  });
+});
+
+describe('query tool row mappers', () => {
+  it('convierte filas de top products y búsqueda a camelCase', () => {
+    expect(
+      mapTopProductRow({ name: 'Leche', amount: '3000', item_count: 3 }),
+    ).toEqual({ name: 'Leche', amount: '3000', itemCount: 3 });
+    expect(
+      mapItemSearchRow({
+        description: 'LECHE 1L',
+        product_name: null,
+        amount: '1000',
+        receipt_date: '2026-09-01',
+        merchant_name: 'Jumbo',
+      }),
+    ).toEqual({
+      description: 'LECHE 1L',
+      productName: null,
+      amount: '1000',
+      receiptDate: '2026-09-01',
+      merchantName: 'Jumbo',
+    });
   });
 });
