@@ -112,3 +112,22 @@ from receipt_extractions
 group by 1, 2
 order by 1 desc;
 ```
+
+## 8. API REST para la web
+
+Todas las rutas requieren `Authorization: Bearer <token>` (mismo `AuthGuard` que el resto de la API) y resuelven la pareja desde el perfil autenticado. Un grupo de otra pareja responde `404`.
+
+| Método | Ruta | Descripción |
+| --- | --- | --- |
+| GET | `/receipts/access` | `{ enabled }` según `receipt_allowed_senders`. Controla si la web muestra la pestaña "Boletas". |
+| GET | `/receipts/groups?month&year` | `{ groups, undated }`: boletas del mes por `receipt_date` (sin `discarded`) y boletas sin fecha. |
+| GET | `/receipts/groups/:id` | Detalle con ítems (nombre de producto si está normalizado), imágenes con `signedUrl` (expira en `RECEIPT_SIGNED_URL_TTL_SECONDS`) y datos de la extracción. Nunca expone el path de Storage. |
+| PATCH | `/receipts/groups/:id` | Edita `receiptDate`, `merchantRaw`, `totalDeclared`; con `status: ready|discarded` fija el estado, sin `status` recalcula la revisión. Una boleta `discarded` solo acepta `status: ready`. |
+| PUT | `/receipts/groups/:id/items` | Reemplaza todos los ítems (`descriptionRaw`, `category`, `amount`, `qty?`, `unitPrice?`, `productId?`) y recalcula la revisión. Un `productId` corregido por la persona se guarda como alias del producto. |
+| POST | `/receipts/groups/:id/normalize` | Reencola la normalización de una boleta `ready|needs_review`. Única vía de recuperación si `normalize-group` agotó sus intentos. |
+| GET | `/receipts/summary?month&year` | Total, cantidad de boletas y desglose por categoría del mes. Solo grupos `ready`. |
+| GET | `/receipts/comparison?months` | Últimos N meses (1-24, default 6) con total y desglose por categoría, del más antiguo al más reciente. |
+
+Los montos viajan como strings (Postgres `numeric`); la web los convierte a número en su mapper.
+
+Prueba manual: obtener un token con `POST /auth/login` y luego `curl -H "Authorization: Bearer <token>" http://localhost:3000/receipts/access` → `{"enabled":true}` para un usuario de la allowlist. Sin token la API responde `401`.
