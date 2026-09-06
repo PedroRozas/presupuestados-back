@@ -15,7 +15,10 @@ import type {
   LlmQueryResult,
   LlmToolCall,
 } from './llm.interfaces.js';
-import { extractFunctionCalls } from './openai-function-calls.js';
+import {
+  extractFunctionCalls,
+  toFunctionCallItem,
+} from './openai-function-calls.js';
 import { readOpenAiUsage } from './openai-usage.js';
 
 export interface OpenAiResponseLike {
@@ -76,6 +79,11 @@ const defaultClientFactory: OpenAiClientFactory = (apiKey) =>
     apiKey,
     maxRetries: OPENAI_MAX_RETRIES,
   }) as unknown as OpenAiClientLike;
+
+const toUserTurn = (text: string) => ({
+  role: 'user' as const,
+  content: [{ type: 'input_text' as const, text }],
+});
 
 const toImageContent = (image: LlmImageInput) => ({
   type: 'input_image' as const,
@@ -143,12 +151,7 @@ export class OpenAiLlmProvider
   async answerWithTools(input: LlmQueryInput): Promise<LlmQueryResult> {
     const startedAt = Date.now();
     const model = this.config.queryModel;
-    const conversation: unknown[] = [
-      {
-        role: 'user',
-        content: [{ type: 'input_text', text: input.userMessage }],
-      },
-    ];
+    const conversation: unknown[] = [toUserTurn(input.userMessage)];
     const totals = { tokensIn: 0, tokensOut: 0, toolCallCount: 0 };
     let responseModel = model;
 
@@ -163,19 +166,19 @@ export class OpenAiLlmProvider
       responseModel = response.model ?? responseModel;
 
       const calls = extractFunctionCalls(response.output);
-      const exhausted = calls.length > 0 && round === input.maxToolRounds;
+      const incomplete = response.status === RESPONSE_STATUS_INCOMPLETE;
+      const exhausted =
+        incomplete || (calls.length > 0 && round === input.maxToolRounds);
       if (calls.length === 0 || exhausted) {
         return {
           text: exhausted ? '' : response.output_text,
-          toolCallCount: totals.toolCallCount,
-          model: responseModel,
-          tokensIn: totals.tokensIn,
-          tokensOut: totals.tokensOut,
-          latencyMs: Date.now() - startedAt,
           exhausted,
+          model: responseModel,
+          latencyMs: Date.now() - startedAt,
+          ...totals,
         };
       }
-      conversation.push(...(response.output ?? []));
+      conversation.push(...calls.map(toFunctionCallItem));
       totals.toolCallCount += calls.length;
       await this.runToolCalls(calls, input, conversation);
     }

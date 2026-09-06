@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import type { ZodType } from 'zod';
 import type { LlmToolCall, LlmToolDefinition } from '../llm/llm.interfaces.js';
-import { RECEIPT_DEFAULTS } from '../receipt.constants.js';
+import {
+  RECEIPT_DEFAULTS,
+  RECEIPT_PRODUCT_CATEGORY_LABELS,
+  type ReceiptProductCategory,
+} from '../receipt.constants.js';
 import { ReceiptQueryRepository } from '../repository/receipt-query.repository.js';
 import {
   CATEGORY_SPEND_JSON_SCHEMA,
@@ -31,6 +35,10 @@ interface QueryTool<TArgs> {
 }
 
 const toAmount = (value: string): number => Number(value);
+
+const categoryLabel = (category: string): string =>
+  RECEIPT_PRODUCT_CATEGORY_LABELS[category as ReceiptProductCategory] ??
+  category;
 
 const parseJson = (
   raw: string,
@@ -108,6 +116,7 @@ export class ReceiptQueryTools {
           receiptCount: summary.receiptCount,
           byCategory: summary.byCategory.map((row) => ({
             category: row.category,
+            label: categoryLabel(row.category),
             amount: toAmount(row.amount),
             itemCount: row.itemCount,
           })),
@@ -165,7 +174,12 @@ export class ReceiptQueryTools {
           itemCount: row.itemCount,
         }));
         const total = byMonth.reduce((sum, row) => sum + row.amount, 0);
-        return { category: args.category, total, byMonth };
+        return {
+          category: args.category,
+          label: categoryLabel(args.category),
+          total,
+          byMonth,
+        };
       },
     });
   }

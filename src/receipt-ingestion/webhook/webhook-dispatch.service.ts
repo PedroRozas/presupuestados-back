@@ -97,11 +97,12 @@ export class WebhookDispatchService {
     message: IncomingTextMessage,
     sender: ReceiptAllowedSender,
   ): Promise<void> {
-    if (message.body.trim().length === 0) return;
+    const body = message.body.trim().slice(0, this.config.queryMaxMessageChars);
+    if (body.length === 0) return;
     await this.queue.enqueueAnswerQuery({
       senderPhoneE164: message.senderPhoneE164,
       coupleId: sender.coupleId,
-      message: message.body,
+      message: body,
     });
   }
 

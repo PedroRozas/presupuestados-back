@@ -143,6 +143,45 @@ describe('OpenAiLlmProvider.answerWithTools', () => {
     expect(result.exhausted).toBe(false);
   });
 
+  it('marca exhausted cuando la respuesta viene incomplete por falta de tokens', async () => {
+    const { provider } = buildProvider([
+      {
+        ...textResponse('Gastaste $1'),
+        status: 'incomplete',
+        incomplete_details: { reason: 'max_output_tokens' },
+      },
+    ]);
+    const executeTool = jest.fn<Promise<unknown>, [LlmToolCall]>();
+    const result = await provider.answerWithTools(buildInput(executeTool));
+    expect(result.exhausted).toBe(true);
+    expect(result.text).toBe('');
+  });
+
+  it('reenvía solo los items function_call, no el razonamiento', async () => {
+    const withReasoning: OpenAiResponseLike = {
+      ...toolResponse('call_r'),
+      output: [
+        { type: 'reasoning', summary: [] },
+        functionCall('call_r', '{}'),
+      ],
+    };
+    const { provider, create } = buildProvider([
+      withReasoning,
+      textResponse('ok'),
+    ]);
+    const executeTool = jest
+      .fn<Promise<unknown>, [LlmToolCall]>()
+      .mockResolvedValue({});
+    await provider.answerWithTools(buildInput(executeTool));
+    const [secondParams] = paramsOfCall(create, 1);
+    const input = secondParams['input'] as { type?: string }[];
+    expect(input.map((item) => item.type)).toEqual([
+      undefined,
+      'function_call',
+      'function_call_output',
+    ]);
+  });
+
   it('corta con exhausted cuando el modelo sigue pidiendo tools tras el máximo de rondas', async () => {
     const { provider, create } = buildProvider([
       toolResponse('c1'),

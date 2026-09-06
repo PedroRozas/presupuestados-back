@@ -33,6 +33,27 @@ export const RECEIPT_PRODUCT_CATEGORIES = [
 export type ReceiptProductCategory =
   (typeof RECEIPT_PRODUCT_CATEGORIES)[number];
 
+export const RECEIPT_PRODUCT_CATEGORY_LABELS: Record<
+  ReceiptProductCategory,
+  string
+> = {
+  frutas_verduras: 'Frutas y verduras',
+  carnes_pescados: 'Carnes y pescados',
+  lacteos_huevos: 'Lácteos y huevos',
+  panaderia: 'Panadería',
+  abarrotes: 'Abarrotes',
+  congelados: 'Congelados',
+  bebidas: 'Bebidas',
+  alcohol: 'Alcohol',
+  snacks_dulces: 'Snacks y dulces',
+  limpieza_hogar: 'Limpieza y hogar',
+  higiene_personal: 'Higiene personal',
+  bebe: 'Bebé',
+  mascotas: 'Mascotas',
+  farmacia: 'Farmacia',
+  otros: 'Otros',
+};
+
 export const RECEIPT_GROUP_STATUSES = [
   'collecting',
   'extracting',

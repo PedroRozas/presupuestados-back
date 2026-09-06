@@ -105,7 +105,9 @@ export class ReceiptQueueService implements OnModuleDestroy {
   }
 
   async enqueueAnswerQuery(payload: AnswerQueryJobPayload): Promise<void> {
-    await this.getQueue().add(RECEIPT_JOB.ANSWER_QUERY, payload);
+    await this.getQueue().add(RECEIPT_JOB.ANSWER_QUERY, payload, {
+      removeOnFail: true,
+    });
     this.logger.log(`job_enqueued name=${RECEIPT_JOB.ANSWER_QUERY}`);
   }
 

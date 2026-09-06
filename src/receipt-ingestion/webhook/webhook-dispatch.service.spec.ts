@@ -71,6 +71,7 @@ describe('WebhookDispatchService', () => {
     const config = {
       rateLimitWindowSeconds: 60,
       rateLimitMax: 20,
+      queryMaxMessageChars: 500,
     } as ReceiptConfigService;
 
     return {
@@ -121,7 +122,7 @@ describe('WebhookDispatchService', () => {
     expect(queue.enqueueIngestImage).not.toHaveBeenCalled();
   });
 
-  it('ignora texto que no es un comando', async () => {
+  it('ignora un texto vacío sin encolar nada', async () => {
     const { service, queue } = buildService({
       sender: { userId: 'u1', coupleId: 'c1' },
     });
@@ -133,13 +134,14 @@ describe('WebhookDispatchService', () => {
           from: PHONE,
           timestamp: '1',
           type: 'text',
-          text: { body: 'hola' },
+          text: { body: '   ' },
         },
       ]),
     );
 
     expect(queue.enqueueIngestImage).not.toHaveBeenCalled();
     expect(queue.enqueueCloseGroup).not.toHaveBeenCalled();
+    expect(queue.enqueueAnswerQuery).not.toHaveBeenCalled();
   });
 
   it('encola el cierre por comando cuando el texto es "listo"', async () => {

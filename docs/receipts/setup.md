@@ -162,7 +162,7 @@ Límites y variables:
 | `RECEIPT_QUERY_RATE_LIMIT_MAX` / `_WINDOW_SECONDS` | 10 / 60 | límite por pareja, compartido entre WhatsApp y web (`rl:receipts:query:<coupleId>`) |
 | `RECEIPT_QUERY_MAX_MESSAGE_CHARS` | 500 | recorte del mensaje antes de enviarlo al modelo |
 
-Seguridad: el texto del usuario nunca entra al system prompt (viaja como turno de usuario), el modelo no recibe ids ni paths, y los logs solo registran `couple`, cantidad de tools, tokens y latencia (`query_answered couple=<id> tools=<n> tokens=<in>/<out> latency=<ms>`), nunca la pregunta ni la respuesta.
+Seguridad: el texto del usuario nunca entra al system prompt (viaja como turno de usuario), el modelo no recibe ids ni paths, y los logs solo registran `couple`, cantidad de tools, tokens y latencia (`query_answered couple=<id> tools=<n> tokens=<in>/<out> latency=<ms> exhausted=<bool>`), nunca la pregunta ni la respuesta. El servicio antepone `Hoy es <fecha en America/Santiago>` a la pregunta para que el modelo resuelva "este mes". El endpoint web exige además que el usuario esté en `receipt_allowed_senders` (`403` si no lo está). Al exceder el rate limit ambos canales responden con el texto fijo "Demasiadas consultas, intenta en un minuto." (en la web con `200`, no `429`). Si el modelo falla en WhatsApp, el remitente recibe "No pude resolver la consulta…" en vez de silencio.
 
 Costo de referencia (piloto, `gpt-5.4-mini`): una pregunta con una tool consume ~1.600 tokens de entrada y ~80 de salida, 2-4 s de latencia. El gasto no se persiste en `receipt_extractions` (no está ligado a una boleta); vigilar por el log o el panel de OpenAI.
 

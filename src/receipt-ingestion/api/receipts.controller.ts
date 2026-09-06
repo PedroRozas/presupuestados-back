@@ -123,6 +123,7 @@ export class ReceiptsController {
     @Body() dto: QueryDto,
     @Req() req: AuthenticatedRequest,
   ): Promise<{ answer: string }> {
+    await this.receipts.assertAccess(req.user.id);
     const coupleId = await this.coupleId(req);
     const answer = await this.queries.answer({
       coupleId,

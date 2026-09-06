@@ -98,7 +98,14 @@ describe('ReceiptQueryTools', () => {
     expect(result).toEqual({
       total: 12000,
       receiptCount: 2,
-      byCategory: [{ category: 'lacteos_huevos', amount: 5000, itemCount: 3 }],
+      byCategory: [
+        {
+          category: 'lacteos_huevos',
+          label: 'Lácteos y huevos',
+          amount: 5000,
+          itemCount: 3,
+        },
+      ],
     });
   });
 
@@ -129,6 +136,7 @@ describe('ReceiptQueryTools', () => {
     );
     expect(result).toEqual({
       category: 'lacteos_huevos',
+      label: 'Lácteos y huevos',
       total: 3500,
       byMonth: [
         { month: '2026-08', amount: 1000, itemCount: 1 },

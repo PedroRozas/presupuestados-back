@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import { ReceiptsService } from './receipts.service.js';
@@ -269,6 +270,15 @@ describe('ReceiptsService', () => {
     await expect(
       failed.service.updateHeader('c1', 'g1', { status: 'discarded' }),
     ).resolves.toBeDefined();
+  });
+
+  it('assertAccess lanza Forbidden para un usuario fuera de la allowlist', async () => {
+    const { service, allowedSenders } = build({});
+    await expect(service.assertAccess('u1')).resolves.toBeUndefined();
+    allowedSenders.findEnabledByUserId.mockResolvedValueOnce(undefined);
+    await expect(service.assertAccess('u2')).rejects.toBeInstanceOf(
+      ForbiddenException,
+    );
   });
 
   it('rechaza editar una boleta descartada salvo para reabrirla', async () => {

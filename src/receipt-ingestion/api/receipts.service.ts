@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -68,6 +69,13 @@ export class ReceiptsService {
     private readonly queue: ReceiptQueueService,
     private readonly config: ReceiptConfigService,
   ) {}
+
+  async assertAccess(userId: string): Promise<void> {
+    const access = await this.getAccess(userId);
+    if (!access.enabled) {
+      throw new ForbiddenException('Sin acceso al módulo de boletas');
+    }
+  }
 
   async getAccess(userId: string): Promise<ReceiptAccessDto> {
     const sender = await this.allowedSenders.findEnabledByUserId(userId);

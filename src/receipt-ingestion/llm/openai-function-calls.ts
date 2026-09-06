@@ -20,6 +20,15 @@ const isFunctionCallItem = (item: unknown): item is OpenAiFunctionCallItem => {
   );
 };
 
+export const toFunctionCallItem = (
+  call: LlmToolCall,
+): OpenAiFunctionCallItem => ({
+  type: FUNCTION_CALL_TYPE,
+  call_id: call.callId,
+  name: call.name,
+  arguments: call.argumentsJson,
+});
+
 export const extractFunctionCalls = (
   output: unknown[] | undefined,
 ): LlmToolCall[] =>
