@@ -100,6 +100,8 @@ La migración `drizzle/0005_familiar_silver_sable.sql` se aplicó de la misma fo
 
 La migración `drizzle/0006_talented_blade.sql` (columna `merchant_rut` en `receipt_groups`) se aplicó de la misma forma (`psql --single-transaction`) el 2026-09-05.
 
+La migración `drizzle/0003_wakeful_famine.sql` (tablas `monthly_incomes` y `monthly_deductions`, de la rama `feat/guardar-simulacion`) se aplicó de la misma forma el 2026-09-06, después de 0004-0006. En la base de datos el orden real es 0004, 0005, 0006, 0003; el journal de Drizzle las lista 0003 → 0006, lo que es equivalente porque ninguna depende de otra.
+
 ## 7. Uso de tokens y latencia
 
 Consulta mensual de uso de la extracción, por modelo:
