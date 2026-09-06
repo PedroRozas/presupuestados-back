@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, notLike } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { DRIZZLE } from '../../database/database.module.js';
 import * as schema from '../../database/schema/index.js';
@@ -8,7 +8,10 @@ import type {
   NewReceiptExtraction,
   ReceiptExtraction,
 } from '../../database/schema/index.js';
-import { RECEIPT_EXTRACTION_STATUS } from '../receipt.constants.js';
+import {
+  RECEIPT_EXTRACTION_STATUS,
+  RECEIPT_NORMALIZATION_PROMPT_PREFIX,
+} from '../receipt.constants.js';
 
 export class ReceiptExtractionInsertError extends Error {
   constructor() {
@@ -43,6 +46,10 @@ export class ReceiptExtractionsRepository {
         and(
           eq(receiptExtractions.groupId, groupId),
           eq(receiptExtractions.status, RECEIPT_EXTRACTION_STATUS.SUCCEEDED),
+          notLike(
+            receiptExtractions.promptVersion,
+            `${RECEIPT_NORMALIZATION_PROMPT_PREFIX}%`,
+          ),
         ),
       )
       .orderBy(desc(receiptExtractions.createdAt))
