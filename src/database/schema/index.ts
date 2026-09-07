@@ -195,6 +195,70 @@ export const deductions = pgTable(
 export type Deduction = typeof deductions.$inferSelect;
 export type NewDeduction = typeof deductions.$inferInsert;
 
+// ─── monthly_incomes ──────────────────────────────────────────────────────────
+
+export const monthlyIncomes = pgTable(
+  'monthly_incomes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ownerId: uuid('owner_id').notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => familyMembers.id),
+    amount: numeric('amount').notNull(),
+    description: text('description'),
+    month: integer('month').notNull(),
+    year: integer('year').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    coupleId: uuid('couple_id').references(() => couples.id),
+  },
+  (t) => [
+    index('idx_monthly_incomes_period').on(
+      t.coupleId,
+      t.year,
+      t.month,
+      t.userId,
+    ),
+  ],
+);
+
+export type MonthlyIncome = typeof monthlyIncomes.$inferSelect;
+export type NewMonthlyIncome = typeof monthlyIncomes.$inferInsert;
+
+// ─── monthly_deductions ───────────────────────────────────────────────────────
+
+export const monthlyDeductions = pgTable(
+  'monthly_deductions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ownerId: uuid('owner_id').notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => familyMembers.id),
+    amount: numeric('amount').notNull(),
+    description: text('description'),
+    month: integer('month').notNull(),
+    year: integer('year').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    coupleId: uuid('couple_id').references(() => couples.id),
+  },
+  (t) => [
+    index('idx_monthly_deductions_period').on(
+      t.coupleId,
+      t.year,
+      t.month,
+      t.userId,
+    ),
+  ],
+);
+
+export type MonthlyDeduction = typeof monthlyDeductions.$inferSelect;
+export type NewMonthlyDeduction = typeof monthlyDeductions.$inferInsert;
+
 // ─── partner_requests ────────────────────────────────────────────────────────
 
 export const partnerRequests = pgTable('partner_requests', {
