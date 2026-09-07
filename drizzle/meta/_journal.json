@@ -29,6 +29,27 @@
       "when": 1781717029933,
       "tag": "0003_wakeful_famine",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788494846013,
+      "tag": "0004_daffy_triton",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788542075694,
+      "tag": "0005_familiar_silver_sable",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788652057947,
+      "tag": "0006_talented_blade",
+      "breakpoints": true
     }
   ]
 }

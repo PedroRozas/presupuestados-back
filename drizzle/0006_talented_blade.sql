@@ -1,0 +1,1 @@
+ALTER TABLE "receipt_groups" ADD COLUMN "merchant_rut" text;

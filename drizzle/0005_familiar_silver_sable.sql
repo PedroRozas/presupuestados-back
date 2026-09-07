@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "idx_receipt_groups_one_collecting_per_sender" ON "receipt_groups" USING btree ("couple_id","sender_phone_e164") WHERE "receipt_groups"."status" = 'collecting';

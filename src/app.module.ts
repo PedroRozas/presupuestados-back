@@ -21,6 +21,7 @@ import { SecurityModule } from './security/security.module.js';
 import { ExportsModule } from './exports/exports.module.js';
 import { SimulationsModule } from './simulations/simulations.module.js';
 import { MonthlyFinanceModule } from './monthly-finance/monthly-finance.module.js';
+import { ReceiptIngestionModule } from './receipt-ingestion/receipt-ingestion.module.js';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { MonthlyFinanceModule } from './monthly-finance/monthly-finance.module.j
     ExportsModule,
     SimulationsModule,
     MonthlyFinanceModule,
+    ReceiptIngestionModule,
   ],
   controllers: [],
   providers: [],

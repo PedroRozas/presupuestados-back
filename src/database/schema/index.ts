@@ -323,3 +323,5 @@ export const aiUsageMonthly = pgTable(
 
 export type AIUsageMonthly = typeof aiUsageMonthly.$inferSelect;
 export type NewAIUsageMonthly = typeof aiUsageMonthly.$inferInsert;
+
+export * from './receipts.js';
