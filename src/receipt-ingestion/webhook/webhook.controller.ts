@@ -64,6 +64,7 @@ export class WebhookController {
       return { received: true };
     }
 
+    this.logger.log('webhook_received');
     await this.dispatchService.dispatch(parsed.data);
     return { received: true };
   }

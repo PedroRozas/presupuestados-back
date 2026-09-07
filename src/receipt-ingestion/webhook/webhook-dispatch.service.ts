@@ -45,7 +45,7 @@ export class WebhookDispatchService {
       message.senderPhoneE164,
     );
     if (!sender) {
-      this.logger.debug(
+      this.logger.warn(
         `sender_not_allowed phone=${maskPhone(message.senderPhoneE164)}`,
       );
       return;

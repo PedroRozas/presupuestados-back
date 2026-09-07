@@ -3,6 +3,7 @@ import {
   ExecutionContext,
   ForbiddenException,
   Injectable,
+  Logger,
 } from '@nestjs/common';
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { Request } from 'express';
@@ -19,6 +20,8 @@ export const computeWebhookSignature = (
 
 @Injectable()
 export class WebhookSignatureGuard implements CanActivate {
+  private readonly logger = new Logger(WebhookSignatureGuard.name);
+
   constructor(private readonly config: ReceiptConfigService) {}
 
   canActivate(context: ExecutionContext): boolean {
@@ -27,7 +30,7 @@ export class WebhookSignatureGuard implements CanActivate {
     const rawBody = request.rawBody;
 
     if (!received || !rawBody) {
-      throw new ForbiddenException();
+      this.reject(received ? 'missing_raw_body' : 'missing_signature');
     }
 
     const expected = computeWebhookSignature(
@@ -41,10 +44,15 @@ export class WebhookSignatureGuard implements CanActivate {
       receivedBuffer.length !== expectedBuffer.length ||
       !timingSafeEqual(receivedBuffer, expectedBuffer)
     ) {
-      throw new ForbiddenException();
+      this.reject('signature_mismatch');
     }
 
     return true;
+  }
+
+  private reject(reason: string): never {
+    this.logger.warn(`webhook_rejected reason=${reason}`);
+    throw new ForbiddenException();
   }
 
   private readSignatureHeader(request: Request): string | undefined {
