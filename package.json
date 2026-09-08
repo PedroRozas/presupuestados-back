@@ -22,6 +22,7 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "receipts:simulate": "node --env-file=.env -r ts-node/register scripts/receipts/simulate-webhook.ts",
+    "receipts:telegram:set-webhook": "node --env-file=.env -r ts-node/register scripts/receipts/telegram-set-webhook.ts",
     "receipts:benchmark": "npm run build && node --env-file=.env dist/scripts/receipts/benchmark.js"
   },
   "dependencies": {

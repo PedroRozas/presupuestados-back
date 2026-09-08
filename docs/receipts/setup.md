@@ -39,7 +39,7 @@ Deshabilitar sin borrar: `update receipt_allowed_senders set enabled = false whe
 
 Ver bloque `RECEIPT_*` en `.env.example`. `REDIS_URL` es obligatorio: sin Redis no hay cola.
 
-`RECEIPT_MESSAGING_SOURCE` elige cómo se envían los avisos al remitente: `meta` (por defecto) usa la API de WhatsApp Cloud; `local` los imprime en los logs del servidor como `whatsapp_text_local`, útil para pruebas sin credenciales de Meta.
+`RECEIPT_MESSAGING_SOURCE` elige cómo se envían los avisos al remitente: `real` (por defecto; `meta` sigue aceptándose como alias) usa la API de WhatsApp Cloud o la Bot API de Telegram según el canal del remitente; `local` los imprime en los logs del servidor como `text_local`, útil para pruebas sin credenciales.
 
 Variables de la extracción con LLM:
 
@@ -75,7 +75,7 @@ El barrido reencola `extract-group` para grupos `extracting` cuya extracción nu
 4. `npm run start:dev`.
 5. `npm run receipts:simulate -- boleta-1.jpg` (usa `RECEIPT_SIMULATE_PHONE` y `RECEIPT_SIMULATE_BASE_URL`, este último por defecto `http://localhost:3000`).
 6. Verificar en logs `job_enqueued`, luego `image_stored`, y en Supabase: fila en `receipt_images`, objeto `.webp` en el bucket.
-7. `npm run receipts:simulate -- --text "listo"` cierra el grupo abierto de inmediato. Verificar en logs `group_closed`, luego `job_enqueued name=extract-group` y `extraction_done group=... status=ready|needs_review items=N tokens=I/O`, luego `job_enqueued name=normalize-group` y `normalize_group_done group=... merchant=matched|created matched=N created=N`, y el aviso final `whatsapp_text_local ... body="Boleta lista: ..."` o `"... necesita revisión ..."`. En la base, `select description_raw, category, qty, unit_price, amount, confidence, position from receipt_items where group_id = '<id>' order by position;` debe listar los ítems extraídos.
+7. `npm run receipts:simulate -- --text "listo"` cierra el grupo abierto de inmediato. Verificar en logs `group_closed`, luego `job_enqueued name=extract-group` y `extraction_done group=... status=ready|needs_review items=N tokens=I/O`, luego `job_enqueued name=normalize-group` y `normalize_group_done group=... merchant=matched|created matched=N created=N`, y el aviso final `text_local ... body="Boleta lista: ..."` o `"... necesita revisión ..."`. En la base, `select description_raw, category, qty, unit_price, amount, confidence, position from receipt_items where group_id = '<id>' order by position;` debe listar los ítems extraídos.
 8. Verificar la normalización en la base:
 
 ```sql
@@ -99,6 +99,8 @@ La migración `drizzle/0004_daffy_triton.sql` (tablas `receipt_*`) se aplicó co
 La migración `drizzle/0005_familiar_silver_sable.sql` se aplicó de la misma forma (`psql --single-transaction`) el 2026-09-04.
 
 La migración `drizzle/0006_talented_blade.sql` (columna `merchant_rut` en `receipt_groups`) se aplicó de la misma forma (`psql --single-transaction`) el 2026-09-05.
+
+La migración `drizzle/0007_sender_address.sql` (renombres `phone_e164`/`sender_phone_e164` → `sender_address`, `wa_message_id` → `channel_message_id`, generada a mano porque `drizzle-kit generate` pide confirmar renombres de forma interactiva) se aplica de la misma forma; ver §10.
 
 La migración `drizzle/0003_wakeful_famine.sql` (tablas `monthly_incomes` y `monthly_deductions`, de la rama `feat/guardar-simulacion`) se aplicó de la misma forma el 2026-09-06, después de 0004-0006. En la base de datos el orden real es 0004, 0005, 0006, 0003; el journal de Drizzle las lista 0003 → 0006, lo que es equivalente porque ninguna depende de otra.
 
@@ -172,10 +174,48 @@ Verificación local:
 
 ```bash
 npm run receipts:simulate -- --text "¿cuánto gasté en septiembre?"
-# log: job_enqueued name=answer-query → query_answered … → whatsapp_text_local body="…"
+# log: job_enqueued name=answer-query → query_answered … → text_local body="…"
 
 curl -s -X POST http://localhost:3000/receipts/query \
   -H "Authorization: Bearer <token>" -H "Content-Type: application/json" \
   -d '{"message":"¿Qué compré en septiembre?"}'
 # → {"answer":"…"}; message de 1 carácter → 400; sin token → 401
 ```
+
+## 10. Canal Telegram
+
+Telegram no exige verificación del negocio, así que es el canal activo mientras la app de Meta siga sin publicar. Todo lo que ocurre después del webhook es idéntico para ambos canales.
+
+**Direcciones de remitente.** El remitente ya no es un teléfono sino una dirección: `+56957598006` para WhatsApp y `tg:<id de usuario>` para Telegram. Las columnas `receipt_allowed_senders.sender_address`, `receipt_groups.sender_address` y `receipt_images.sender_address` (migración 0007, renombres) guardan ese valor. La allowlist sigue siendo obligatoria y por dirección.
+
+**Crear el bot.**
+
+1. En Telegram, hablar con `@BotFather` → `/newbot`, elegir nombre y usuario. Copiar el token a `RECEIPT_TELEGRAM_BOT_TOKEN`.
+2. Definir `RECEIPT_TELEGRAM_WEBHOOK_SECRET` con `openssl rand -hex 32`. Telegram lo enviará en el header `X-Telegram-Bot-Api-Secret-Token` y el guard lo compara en tiempo constante.
+3. Desplegar con ambas variables y `RECEIPT_MEDIA_SOURCE=real`, `RECEIPT_MESSAGING_SOURCE=real`.
+4. Registrar el webhook una vez por entorno: `npm run receipts:telegram:set-webhook -- https://<dominio-backend>`. El script llama `setWebhook` (solo `message`, descarta updates pendientes) y muestra `getWebhookInfo`.
+
+**Onboarding de un remitente.** Escribir cualquier cosa al bot desde el celular. El log mostrará `sender_not_allowed sender=tg:123456789`; insertar esa dirección en `receipt_allowed_senders` con el `user_id` y `couple_id` de la persona y `enabled = true`. Desde ese momento el bot responde.
+
+**Qué acepta el bot.** Solo chats privados de personas (no grupos ni bots). Fotos (`photo`, se toma el tamaño mayor), imágenes enviadas como archivo (`document` con mime `image/*`) y texto. Texto `listo` cierra el grupo; cualquier otro texto es una consulta al chat. Stickers, audios y `edited_message` se ignoran con 200.
+
+**Calidad de imagen.** Telegram recomprime las fotos normales a un máximo de 1280 px de lado. Para boletas largas o poco legibles, enviarlas "como archivo" conserva la resolución original.
+
+**Variables.**
+
+| Variable | Default | Uso |
+| --- | --- | --- |
+| `RECEIPT_TELEGRAM_BOT_TOKEN` | obligatoria al primer uso | descargas (`getFile`) y envíos (`sendMessage`) |
+| `RECEIPT_TELEGRAM_WEBHOOK_SECRET` | obligatoria al recibir un webhook | guard del endpoint `/receipts/telegram/webhook` |
+| `RECEIPT_TELEGRAM_API_BASE_URL` | `https://api.telegram.org` | tests y proxies |
+
+**Verificación local** (`RECEIPT_MEDIA_SOURCE=local`, `RECEIPT_MESSAGING_SOURCE=local`, dirección `tg:100000000` en la allowlist):
+
+```bash
+npm run receipts:simulate -- --telegram boleta-01.jpg
+npm run receipts:simulate -- --telegram --text listo
+# log: telegram_update_received → job_enqueued name=ingest-image → … → text_local to=tg:100000000 body="Boleta lista: …"
+npm run receipts:simulate -- --telegram --text "¿cuánto gasté este mes?"
+```
+
+Logs propios del canal: `telegram_update_received`, `telegram_update_unrecognized`, `telegram_webhook_rejected reason=<missing_header|missing_secret|mismatch>`, `telegram_text_sent to=tg:…`, `telegram_text_truncated`. El token del bot y las URLs de descarga nunca se loguean.
