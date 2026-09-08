@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ReceiptConfigService } from '../receipt.config.js';
-import { maskPhone } from '../utils/mask-phone.js';
+import { maskSenderAddress } from '../utils/sender-address.js';
 import { buildTextMessageBody } from './whatsapp-message-body.js';
 import type { WhatsAppMessagingClient } from './whatsapp-messaging.client.js';
 
@@ -19,7 +19,7 @@ export class MetaWhatsAppMessagingClient implements WhatsAppMessagingClient {
 
   constructor(private readonly config: ReceiptConfigService) {}
 
-  async sendText(toPhoneE164: string, body: string): Promise<void> {
+  async sendText(toAddress: string, body: string): Promise<void> {
     const url = `${GRAPH_BASE_URL}/${this.config.graphApiVersion}/${this.config.whatsappPhoneNumberId}/messages`;
     const response = await fetch(url, {
       method: 'POST',
@@ -27,12 +27,12 @@ export class MetaWhatsAppMessagingClient implements WhatsAppMessagingClient {
         Authorization: `Bearer ${this.config.whatsappAccessToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify(buildTextMessageBody(toPhoneE164, body)),
+      body: JSON.stringify(buildTextMessageBody(toAddress, body)),
     });
 
     if (!response.ok) {
       throw new WhatsAppSendError(response.status);
     }
-    this.logger.log(`whatsapp_text_sent to=${maskPhone(toPhoneE164)}`);
+    this.logger.log(`whatsapp_text_sent to=${maskSenderAddress(toAddress)}`);
   }
 }

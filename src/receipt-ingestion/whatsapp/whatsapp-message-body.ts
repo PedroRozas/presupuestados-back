@@ -6,15 +6,16 @@ export interface WhatsAppTextMessageBody {
   text: { preview_url: false; body: string };
 }
 
-const stripPlus = (phoneE164: string): string => phoneE164.replace(/^\+/, '');
+const stripPlus = (senderAddress: string): string =>
+  senderAddress.replace(/^\+/, '');
 
 export const buildTextMessageBody = (
-  toPhoneE164: string,
+  toAddress: string,
   body: string,
 ): WhatsAppTextMessageBody => ({
   messaging_product: 'whatsapp',
   recipient_type: 'individual',
-  to: stripPlus(toPhoneE164),
+  to: stripPlus(toAddress),
   type: 'text',
   text: { preview_url: false, body },
 });

@@ -51,16 +51,16 @@ describe('metaWebhookSchema', () => {
     expect(messages).toEqual([
       {
         kind: 'image',
-        waMessageId: 'wamid.img',
-        senderPhoneE164: '+56912345678',
+        channelMessageId: 'wamid.img',
+        senderAddress: '+56912345678',
         receivedAt: new Date(1725300000 * 1000),
         mediaId: 'media-1',
         mimeType: 'image/jpeg',
       },
       {
         kind: 'text',
-        waMessageId: 'wamid.txt',
-        senderPhoneE164: '+56912345678',
+        channelMessageId: 'wamid.txt',
+        senderAddress: '+56912345678',
         receivedAt: new Date(1725300005 * 1000),
         body: 'Listo',
       },

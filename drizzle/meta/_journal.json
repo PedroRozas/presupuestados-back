@@ -50,6 +50,13 @@
       "when": 1788652057947,
       "tag": "0006_talented_blade",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788827294634,
+      "tag": "0007_sender_address",
+      "breakpoints": true
     }
   ]
 }

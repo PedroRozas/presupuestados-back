@@ -15,10 +15,10 @@ const buildConfig = (): ReceiptConfigService =>
   }) as unknown as ReceiptConfigService;
 
 const buildPayload = (): IngestImageJobPayload => ({
-  waMessageId: 'wamid.1',
+  channelMessageId: 'wamid.1',
   mediaId: 'media-1',
   mimeType: 'image/jpeg',
-  senderPhoneE164: '+56912345678',
+  senderAddress: '+56912345678',
   senderUserId: 'u1',
   coupleId: 'c1',
   receivedAtIso: new Date(0).toISOString(),
@@ -49,7 +49,7 @@ describe('buildCloseGroupJobId', () => {
     expect(
       buildCloseGroupJobId({
         kind: 'command',
-        senderPhoneE164: '+56912345678',
+        senderAddress: '+56912345678',
         coupleId: 'c1',
       }),
     ).toBe('close-c1-56912345678-command');

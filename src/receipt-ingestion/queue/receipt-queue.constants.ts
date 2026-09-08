@@ -1,8 +1,8 @@
 export interface IngestImageJobPayload {
-  waMessageId: string;
+  channelMessageId: string;
   mediaId: string;
   mimeType: string | undefined;
-  senderPhoneE164: string;
+  senderAddress: string;
   senderUserId: string;
   coupleId: string;
   receivedAtIso: string;
@@ -17,7 +17,7 @@ export interface CloseGroupByWindowPayload {
 
 export interface CloseGroupByCommandPayload {
   kind: 'command';
-  senderPhoneE164: string;
+  senderAddress: string;
   coupleId: string;
 }
 
@@ -26,14 +26,14 @@ export type CloseGroupJobPayload =
   | CloseGroupByCommandPayload;
 
 export interface NotifyUserJobPayload {
-  toPhoneE164: string;
+  toAddress: string;
   body: string;
 }
 
 export interface ExtractGroupJobPayload {
   groupId: string;
   coupleId: string;
-  senderPhoneE164: string;
+  senderAddress: string;
 }
 
 export interface NormalizeGroupJobPayload {
@@ -42,7 +42,7 @@ export interface NormalizeGroupJobPayload {
 }
 
 export interface AnswerQueryJobPayload {
-  senderPhoneE164: string;
+  senderAddress: string;
   coupleId: string;
   message: string;
 }

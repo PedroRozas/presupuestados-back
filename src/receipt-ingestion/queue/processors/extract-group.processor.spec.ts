@@ -6,7 +6,7 @@ import type { ReceiptGroupsRepository } from '../../repository/receipt-groups.re
 const payload = {
   groupId: 'g1',
   coupleId: 'c1',
-  senderPhoneE164: '+56912345678',
+  senderAddress: '+56912345678',
 };
 const summary = {
   merchantRaw: 'JUMBO',
@@ -47,7 +47,7 @@ describe('ExtractGroupProcessor', () => {
       attempt: 1,
     });
     expect(queue.enqueueNotifyUser).toHaveBeenCalledWith({
-      toPhoneE164: '+56912345678',
+      toAddress: '+56912345678',
       body: 'Boleta lista: JUMBO, 01-09-2026, total $3.480, 2 ítems.',
     });
     expect(queue.enqueueNormalizeGroup).toHaveBeenCalledWith({

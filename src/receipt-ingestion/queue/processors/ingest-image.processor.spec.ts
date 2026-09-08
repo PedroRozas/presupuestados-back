@@ -10,10 +10,10 @@ import type { ReceiptQueueService } from '../receipt-queue.service.js';
 import type { ReceiptConfigService } from '../../receipt.config.js';
 
 const payload: IngestImageJobPayload = {
-  waMessageId: 'wamid.1',
+  channelMessageId: 'wamid.1',
   mediaId: 'media-1',
   mimeType: 'image/jpeg',
-  senderPhoneE164: '+56912345678',
+  senderAddress: '+56912345678',
   senderUserId: 'user-1',
   coupleId: 'couple-1',
   receivedAtIso: '2026-03-05T23:30:00.000Z',
@@ -115,7 +115,7 @@ describe('IngestImageProcessor', () => {
       expect.objectContaining({
         groupId: 'group-1',
         coupleId: 'couple-1',
-        waMessageId: 'wamid.1',
+        channelMessageId: 'wamid.1',
         senderUserId: 'user-1',
         storageBucket: 'receipts',
         storagePath: 'couple-1/2026/03/group-1/2.webp',

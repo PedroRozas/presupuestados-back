@@ -9,7 +9,7 @@ import { ReceiptGroupsRepository } from '../../repository/receipt-groups.reposit
 import { ReceiptImagesRepository } from '../../repository/receipt-images.repository.js';
 import { ReceiptStorageService } from '../../storage/receipt-storage.service.js';
 import { buildStoragePath } from '../../utils/storage-path.js';
-import { maskPhone } from '../../utils/mask-phone.js';
+import { maskSenderAddress } from '../../utils/sender-address.js';
 import {
   WHATSAPP_MEDIA_CLIENT,
   type WhatsAppMediaClient,
@@ -45,7 +45,7 @@ export class IngestImageProcessor {
   ) {}
 
   async process(payload: IngestImageJobPayload): Promise<IngestImageResult> {
-    if (await this.imagesRepo.existsByMessageId(payload.waMessageId)) {
+    if (await this.imagesRepo.existsByMessageId(payload.channelMessageId)) {
       return { outcome: 'duplicate_message' };
     }
 
@@ -56,14 +56,14 @@ export class IngestImageProcessor {
       await this.imagesRepo.existsBySha256(payload.coupleId, processed.sha256)
     ) {
       this.logger.log(
-        `image_duplicate_content phone=${maskPhone(payload.senderPhoneE164)}`,
+        `image_duplicate_content sender=${maskSenderAddress(payload.senderAddress)}`,
       );
       return { outcome: 'duplicate_content' };
     }
 
     const receivedAt = new Date(payload.receivedAtIso);
     const group = await this.groupService.resolveOpenGroup({
-      senderPhoneE164: payload.senderPhoneE164,
+      senderAddress: payload.senderAddress,
       coupleId: payload.coupleId,
       userId: payload.senderUserId,
       receivedAt,
@@ -97,8 +97,8 @@ export class IngestImageProcessor {
     const image = await this.imagesRepo.create({
       groupId: group.id,
       coupleId: payload.coupleId,
-      waMessageId: payload.waMessageId,
-      senderPhoneE164: payload.senderPhoneE164,
+      channelMessageId: payload.channelMessageId,
+      senderAddress: payload.senderAddress,
       senderUserId: payload.senderUserId,
       receivedAt,
       storageBucket: this.storage.bucket,

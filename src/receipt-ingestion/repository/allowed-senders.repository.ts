@@ -12,15 +12,15 @@ export class AllowedSendersRepository {
     @Inject(DRIZZLE) private readonly db: NodePgDatabase<typeof schema>,
   ) {}
 
-  async findEnabledByPhone(
-    phoneE164: string,
+  async findEnabledByAddress(
+    senderAddress: string,
   ): Promise<ReceiptAllowedSender | undefined> {
     const rows = await this.db
       .select()
       .from(receiptAllowedSenders)
       .where(
         and(
-          eq(receiptAllowedSenders.phoneE164, phoneE164),
+          eq(receiptAllowedSenders.senderAddress, senderAddress),
           eq(receiptAllowedSenders.enabled, true),
         ),
       )

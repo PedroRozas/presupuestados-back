@@ -36,7 +36,7 @@ export class ExtractGroupProcessor {
     const body = this.messageFor(outcome);
     if (body) {
       await this.queue.enqueueNotifyUser({
-        toPhoneE164: payload.senderPhoneE164,
+        toAddress: payload.senderAddress,
         body,
       });
     }
@@ -58,7 +58,7 @@ export class ExtractGroupProcessor {
       return;
     }
     await this.queue.enqueueNotifyUser({
-      toPhoneE164: payload.senderPhoneE164,
+      toAddress: payload.senderAddress,
       body: buildExtractionFailedMessage(),
     });
     this.logger.error(`extraction_exhausted group=${payload.groupId}`);

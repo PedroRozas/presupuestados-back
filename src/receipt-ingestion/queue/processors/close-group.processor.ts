@@ -85,7 +85,7 @@ export class CloseGroupProcessor {
   ): Promise<ReceiptGroup | undefined> {
     return payload.kind === 'window'
       ? this.groups.findById(payload.groupId)
-      : this.groups.findOpenBySender(payload.senderPhoneE164, payload.coupleId);
+      : this.groups.findOpenBySender(payload.senderAddress, payload.coupleId);
   }
 
   private async handleMissingGroup(
@@ -102,7 +102,7 @@ export class CloseGroupProcessor {
     payload: CloseGroupByCommandPayload,
   ): Promise<void> {
     await this.queue.enqueueNotifyUser({
-      toPhoneE164: payload.senderPhoneE164,
+      toAddress: payload.senderAddress,
       body: buildNoOpenGroupMessage(),
     });
   }
@@ -115,7 +115,7 @@ export class CloseGroupProcessor {
     await this.queue.enqueueExtractGroup({
       groupId: group.id,
       coupleId: group.coupleId,
-      senderPhoneE164: group.senderPhoneE164,
+      senderAddress: group.senderAddress,
     });
     this.logger.log(`group_closed group=${group.id}`);
     return { outcome: 'closed', groupId: group.id };

@@ -4,7 +4,7 @@ import type { ReceiptConfigService } from '../receipt.config.js';
 import type { ReceiptGroup } from '../../database/schema/index.js';
 
 const input = {
-  senderPhoneE164: '+56912345678',
+  senderAddress: '+56912345678',
   coupleId: 'c1',
   userId: 'u1',
   receivedAt: new Date('2026-09-04T12:00:00.000Z'),

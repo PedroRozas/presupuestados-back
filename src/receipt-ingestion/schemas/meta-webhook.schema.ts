@@ -69,8 +69,8 @@ export type MetaWebhookPayload = z.infer<typeof metaWebhookSchema>;
 type MetaMessage = z.infer<typeof messageSchema>;
 
 interface IncomingMessageBase {
-  waMessageId: string;
-  senderPhoneE164: string;
+  channelMessageId: string;
+  senderAddress: string;
   receivedAt: Date;
 }
 
@@ -107,8 +107,8 @@ const toIncomingMessage = (
   message: MetaMessage,
 ): IncomingWhatsAppMessage | undefined => {
   const base: IncomingMessageBase = {
-    waMessageId: message.id,
-    senderPhoneE164: toE164(message.from),
+    channelMessageId: message.id,
+    senderAddress: toE164(message.from),
     receivedAt: toDate(message.timestamp),
   };
 

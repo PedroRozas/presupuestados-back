@@ -14,7 +14,7 @@ import {
   type IncomingWhatsAppMessage,
   type MetaWebhookPayload,
 } from '../schemas/meta-webhook.schema.js';
-import { maskPhone } from '../utils/mask-phone.js';
+import { maskSenderAddress } from '../utils/sender-address.js';
 import type { ReceiptAllowedSender } from '../../database/schema/index.js';
 
 const IMMEDIATE_DELAY_MS = 0;
@@ -41,19 +41,19 @@ export class WebhookDispatchService {
   }
 
   private async dispatchOne(message: IncomingWhatsAppMessage): Promise<void> {
-    const sender = await this.allowedSenders.findEnabledByPhone(
-      message.senderPhoneE164,
+    const sender = await this.allowedSenders.findEnabledByAddress(
+      message.senderAddress,
     );
     if (!sender) {
       this.logger.warn(
-        `sender_not_allowed phone=${maskPhone(message.senderPhoneE164)}`,
+        `sender_not_allowed sender=${maskSenderAddress(message.senderAddress)}`,
       );
       return;
     }
 
-    if (!(await this.isWithinRateLimit(message.senderPhoneE164))) {
+    if (!(await this.isWithinRateLimit(message.senderAddress))) {
       this.logger.warn(
-        `sender_rate_limited phone=${maskPhone(message.senderPhoneE164)}`,
+        `sender_rate_limited sender=${maskSenderAddress(message.senderAddress)}`,
       );
       return;
     }
@@ -69,8 +69,8 @@ export class WebhookDispatchService {
     await this.enqueueQuery(message, sender);
   }
 
-  private async isWithinRateLimit(phoneE164: string): Promise<boolean> {
-    const key = `${RECEIPT_RATE_LIMIT_KEY_PREFIX}:${phoneE164}`;
+  private async isWithinRateLimit(senderAddress: string): Promise<boolean> {
+    const key = `${RECEIPT_RATE_LIMIT_KEY_PREFIX}:${senderAddress}`;
     const count = await this.redis.incrementWithTtl(
       key,
       this.config.rateLimitWindowSeconds,
@@ -83,10 +83,10 @@ export class WebhookDispatchService {
     sender: ReceiptAllowedSender,
   ): Promise<void> {
     await this.queue.enqueueIngestImage({
-      waMessageId: message.waMessageId,
+      channelMessageId: message.channelMessageId,
       mediaId: message.mediaId,
       mimeType: message.mimeType,
-      senderPhoneE164: message.senderPhoneE164,
+      senderAddress: message.senderAddress,
       senderUserId: sender.userId,
       coupleId: sender.coupleId,
       receivedAtIso: message.receivedAt.toISOString(),
@@ -100,7 +100,7 @@ export class WebhookDispatchService {
     const body = message.body.trim().slice(0, this.config.queryMaxMessageChars);
     if (body.length === 0) return;
     await this.queue.enqueueAnswerQuery({
-      senderPhoneE164: message.senderPhoneE164,
+      senderAddress: message.senderAddress,
       coupleId: sender.coupleId,
       message: body,
     });
@@ -113,7 +113,7 @@ export class WebhookDispatchService {
     await this.queue.enqueueCloseGroup(
       {
         kind: 'command',
-        senderPhoneE164: message.senderPhoneE164,
+        senderAddress: message.senderAddress,
         coupleId: sender.coupleId,
       },
       IMMEDIATE_DELAY_MS,

@@ -13,7 +13,7 @@ const group = (overrides: Partial<ReceiptGroup>): ReceiptGroup =>
   ({
     id: 'group-1',
     coupleId: 'couple-1',
-    senderPhoneE164: '+56912345678',
+    senderAddress: '+56912345678',
     status: 'collecting',
     lastImageAt: secondsBefore(120),
     ...overrides,
@@ -69,7 +69,7 @@ describe('CloseGroupProcessor', () => {
     expect(queue.enqueueExtractGroup).toHaveBeenCalledWith({
       groupId: 'group-1',
       coupleId: 'couple-1',
-      senderPhoneE164: '+56912345678',
+      senderAddress: '+56912345678',
     });
     expect(queue.enqueueNotifyUser).not.toHaveBeenCalled();
   });
@@ -135,7 +135,7 @@ describe('CloseGroupProcessor', () => {
 
     const result = await processor.process({
       kind: 'command',
-      senderPhoneE164: '+56912345678',
+      senderAddress: '+56912345678',
       coupleId: 'couple-1',
     });
 
@@ -148,7 +148,7 @@ describe('CloseGroupProcessor', () => {
     expect(queue.enqueueExtractGroup).toHaveBeenCalledWith({
       groupId: 'group-1',
       coupleId: 'couple-1',
-      senderPhoneE164: '+56912345678',
+      senderAddress: '+56912345678',
     });
     expect(queue.enqueueNotifyUser).not.toHaveBeenCalled();
   });
@@ -177,13 +177,13 @@ describe('CloseGroupProcessor', () => {
 
     const result = await processor.process({
       kind: 'command',
-      senderPhoneE164: '+56912345678',
+      senderAddress: '+56912345678',
       coupleId: 'couple-1',
     });
 
     expect(result).toEqual({ outcome: 'no_open_group' });
     expect(queue.enqueueNotifyUser).toHaveBeenCalledWith({
-      toPhoneE164: '+56912345678',
+      toAddress: '+56912345678',
       body: 'No tengo ninguna boleta abierta. Envíame la foto primero.',
     });
   });

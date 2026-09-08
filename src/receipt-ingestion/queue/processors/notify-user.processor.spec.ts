@@ -10,7 +10,7 @@ describe('NotifyUserProcessor', () => {
       messaging as unknown as WhatsAppMessagingClient,
     );
 
-    await processor.process({ toPhoneE164: '+56912345678', body: 'Hola' });
+    await processor.process({ toAddress: '+56912345678', body: 'Hola' });
 
     expect(messaging.sendText).toHaveBeenCalledWith('+56912345678', 'Hola');
   });

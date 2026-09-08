@@ -13,6 +13,6 @@ export class NotifyUserProcessor {
   ) {}
 
   async process(payload: NotifyUserJobPayload): Promise<void> {
-    await this.messaging.sendText(payload.toPhoneE164, payload.body);
+    await this.messaging.sendText(payload.toAddress, payload.body);
   }
 }

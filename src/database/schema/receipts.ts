@@ -36,7 +36,7 @@ export const receiptSourceKind = pgEnum(
 
 export const receiptAllowedSenders = pgTable('receipt_allowed_senders', {
   id: uuid('id').primaryKey().defaultRandom(),
-  phoneE164: text('phone_e164').notNull().unique(),
+  senderAddress: text('sender_address').notNull().unique(),
   userId: uuid('user_id')
     .notNull()
     .references(() => profiles.id),
@@ -94,7 +94,7 @@ export const receiptGroups = pgTable(
     createdByUserId: uuid('created_by_user_id')
       .notNull()
       .references(() => profiles.id),
-    senderPhoneE164: text('sender_phone_e164').notNull(),
+    senderAddress: text('sender_address').notNull(),
     status: receiptGroupStatus('status').notNull().default('collecting'),
     receiptDate: date('receipt_date'),
     merchantId: uuid('merchant_id').references(() => receiptMerchants.id),
@@ -115,9 +115,9 @@ export const receiptGroups = pgTable(
   },
   (t) => [
     index('idx_receipt_groups_couple_date').on(t.coupleId, t.receiptDate),
-    index('idx_receipt_groups_sender_status').on(t.senderPhoneE164, t.status),
+    index('idx_receipt_groups_sender_status').on(t.senderAddress, t.status),
     uniqueIndex('idx_receipt_groups_one_collecting_per_sender')
-      .on(t.coupleId, t.senderPhoneE164)
+      .on(t.coupleId, t.senderAddress)
       .where(sql`${t.status} = 'collecting'`),
   ],
 );
@@ -135,8 +135,8 @@ export const receiptImages = pgTable(
     coupleId: uuid('couple_id')
       .notNull()
       .references(() => couples.id),
-    waMessageId: text('wa_message_id').notNull().unique(),
-    senderPhoneE164: text('sender_phone_e164').notNull(),
+    channelMessageId: text('channel_message_id').notNull().unique(),
+    senderAddress: text('sender_address').notNull(),
     senderUserId: uuid('sender_user_id')
       .notNull()
       .references(() => profiles.id),

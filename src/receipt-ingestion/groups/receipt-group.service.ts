@@ -6,7 +6,7 @@ import { isUniqueViolation } from '../utils/postgres-errors.js';
 import { isWithinGroupWindow } from './group-window.js';
 
 export interface ResolveOpenGroupInput {
-  senderPhoneE164: string;
+  senderAddress: string;
   coupleId: string;
   userId: string;
   receivedAt: Date;
@@ -21,7 +21,7 @@ export class ReceiptGroupService {
 
   async resolveOpenGroup(input: ResolveOpenGroupInput): Promise<ReceiptGroup> {
     const open = await this.groups.findOpenBySender(
-      input.senderPhoneE164,
+      input.senderAddress,
       input.coupleId,
     );
 
@@ -46,13 +46,13 @@ export class ReceiptGroupService {
       return await this.groups.create({
         coupleId: input.coupleId,
         createdByUserId: input.userId,
-        senderPhoneE164: input.senderPhoneE164,
+        senderAddress: input.senderAddress,
         lastImageAt: input.receivedAt,
       });
     } catch (error) {
       if (!isUniqueViolation(error)) throw error;
       const concurrent = await this.groups.findOpenBySender(
-        input.senderPhoneE164,
+        input.senderAddress,
         input.coupleId,
       );
       if (!concurrent) throw error;

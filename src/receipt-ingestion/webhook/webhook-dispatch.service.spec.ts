@@ -44,12 +44,12 @@ describe('WebhookDispatchService', () => {
     rateLimitCount?: number;
   }) => {
     const allowedSenders = {
-      findEnabledByPhone: jest.fn(() =>
+      findEnabledByAddress: jest.fn(() =>
         Promise.resolve(
           options.sender
             ? {
                 id: 's1',
-                phoneE164: `+${PHONE}`,
+                senderAddress: `+${PHONE}`,
                 enabled: true,
                 createdAt: new Date(),
                 ...options.sender,
@@ -93,10 +93,10 @@ describe('WebhookDispatchService', () => {
     await service.dispatch(buildPayload([imageMessage('wamid.1')]));
 
     expect(queue.enqueueIngestImage).toHaveBeenCalledWith({
-      waMessageId: 'wamid.1',
+      channelMessageId: 'wamid.1',
       mediaId: 'media-wamid.1',
       mimeType: 'image/jpeg',
-      senderPhoneE164: `+${PHONE}`,
+      senderAddress: `+${PHONE}`,
       senderUserId: 'u1',
       coupleId: 'c1',
       receivedAtIso: new Date(1725300000 * 1000).toISOString(),
@@ -162,7 +162,7 @@ describe('WebhookDispatchService', () => {
     );
 
     expect(queue.enqueueCloseGroup).toHaveBeenCalledWith(
-      { kind: 'command', senderPhoneE164: `+${PHONE}`, coupleId: 'c1' },
+      { kind: 'command', senderAddress: `+${PHONE}`, coupleId: 'c1' },
       0,
     );
     expect(queue.enqueueIngestImage).not.toHaveBeenCalled();
@@ -187,7 +187,7 @@ describe('WebhookDispatchService', () => {
 
     expect(queue.enqueueCloseGroup).not.toHaveBeenCalled();
     expect(queue.enqueueAnswerQuery).toHaveBeenCalledWith({
-      senderPhoneE164: `+${PHONE}`,
+      senderAddress: `+${PHONE}`,
       coupleId: 'c1',
       message: 'hola',
     });
