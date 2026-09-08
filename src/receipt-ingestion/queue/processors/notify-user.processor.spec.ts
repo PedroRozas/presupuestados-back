@@ -1,5 +1,5 @@
 import { NotifyUserProcessor } from './notify-user.processor.js';
-import type { WhatsAppMessagingClient } from '../../whatsapp/whatsapp-messaging.client.js';
+import type { MessagingClient } from '../../channels/messaging.client.js';
 
 describe('NotifyUserProcessor', () => {
   it('envía el texto al número indicado', async () => {
@@ -7,7 +7,7 @@ describe('NotifyUserProcessor', () => {
       sendText: jest.fn(() => Promise.resolve()),
     };
     const processor = new NotifyUserProcessor(
-      messaging as unknown as WhatsAppMessagingClient,
+      messaging as unknown as MessagingClient,
     );
 
     await processor.process({ toAddress: '+56912345678', body: 'Hola' });

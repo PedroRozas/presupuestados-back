@@ -1,11 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { readFile } from 'node:fs/promises';
 import { basename, extname, join } from 'node:path';
-import { ReceiptConfigService } from '../receipt.config.js';
-import type {
-  DownloadedMedia,
-  WhatsAppMediaClient,
-} from './whatsapp-media.client.js';
+import { ReceiptConfigService } from '../../receipt.config.js';
+import type { DownloadedMedia, MediaClient } from '../media.client.js';
 
 const MIME_BY_EXTENSION: Record<string, string> = {
   '.jpg': 'image/jpeg',
@@ -16,7 +13,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
 const DEFAULT_MIME_TYPE = 'application/octet-stream';
 
 @Injectable()
-export class LocalWhatsAppMediaClient implements WhatsAppMediaClient {
+export class LocalMediaClient implements MediaClient {
   constructor(private readonly config: ReceiptConfigService) {}
 
   async download(mediaId: string): Promise<DownloadedMedia> {

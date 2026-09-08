@@ -1,6 +1,6 @@
 import { IngestImageProcessor } from './ingest-image.processor.js';
 import type { IngestImageJobPayload } from '../receipt-queue.constants.js';
-import type { WhatsAppMediaClient } from '../../whatsapp/whatsapp-media.client.js';
+import type { MediaClient } from '../../channels/media.client.js';
 import type { ImageProcessorService } from '../../media/image-processor.service.js';
 import type { ReceiptStorageService } from '../../storage/receipt-storage.service.js';
 import type { ReceiptGroupService } from '../../groups/receipt-group.service.js';
@@ -70,7 +70,7 @@ const buildProcessor = (overrides: {
   const config = { groupWindowSeconds: 90 } as ReceiptConfigService;
 
   const processor = new IngestImageProcessor(
-    media as unknown as WhatsAppMediaClient,
+    media as unknown as MediaClient,
     images as unknown as ImageProcessorService,
     storage as unknown as ReceiptStorageService,
     groupService as unknown as ReceiptGroupService,

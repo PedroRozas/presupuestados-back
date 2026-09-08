@@ -1,15 +1,15 @@
 import { Inject, Injectable } from '@nestjs/common';
 import {
-  WHATSAPP_MESSAGING_CLIENT,
-  type WhatsAppMessagingClient,
-} from '../../whatsapp/whatsapp-messaging.client.js';
+  MESSAGING_CLIENT,
+  type MessagingClient,
+} from '../../channels/messaging.client.js';
 import type { NotifyUserJobPayload } from '../receipt-queue.constants.js';
 
 @Injectable()
 export class NotifyUserProcessor {
   constructor(
-    @Inject(WHATSAPP_MESSAGING_CLIENT)
-    private readonly messaging: WhatsAppMessagingClient,
+    @Inject(MESSAGING_CLIENT)
+    private readonly messaging: MessagingClient,
   ) {}
 
   async process(payload: NotifyUserJobPayload): Promise<void> {

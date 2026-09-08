@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ReceiptConfigService } from '../receipt.config.js';
-import { maskSenderAddress } from '../utils/sender-address.js';
-import { buildTextMessageBody } from './whatsapp-message-body.js';
-import type { WhatsAppMessagingClient } from './whatsapp-messaging.client.js';
+import { ReceiptConfigService } from '../../receipt.config.js';
+import { maskSenderAddress } from '../../utils/sender-address.js';
+import { buildTextMessageBody } from '../../whatsapp/whatsapp-message-body.js';
+import type { MessagingClient } from '../messaging.client.js';
 
 const GRAPH_BASE_URL = 'https://graph.facebook.com';
 
@@ -14,7 +14,7 @@ export class WhatsAppSendError extends Error {
 }
 
 @Injectable()
-export class MetaWhatsAppMessagingClient implements WhatsAppMessagingClient {
+export class MetaWhatsAppMessagingClient implements MessagingClient {
   private readonly logger = new Logger(MetaWhatsAppMessagingClient.name);
 
   constructor(private readonly config: ReceiptConfigService) {}

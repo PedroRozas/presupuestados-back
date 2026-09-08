@@ -38,12 +38,16 @@ import {
   LLM_QUERY_PROVIDER,
 } from './llm/llm.interfaces.js';
 import { OpenAiLlmProvider } from './llm/openai-llm.provider.js';
-import { WHATSAPP_MEDIA_CLIENT } from './whatsapp/whatsapp-media.client.js';
-import { MetaWhatsAppMediaClient } from './whatsapp/meta-whatsapp-media.client.js';
-import { LocalWhatsAppMediaClient } from './whatsapp/local-whatsapp-media.client.js';
-import { WHATSAPP_MESSAGING_CLIENT } from './whatsapp/whatsapp-messaging.client.js';
-import { MetaWhatsAppMessagingClient } from './whatsapp/meta-whatsapp-messaging.client.js';
-import { LocalWhatsAppMessagingClient } from './whatsapp/local-whatsapp-messaging.client.js';
+import { MEDIA_CLIENT } from './channels/media.client.js';
+import { MediaRouter } from './channels/media.router.js';
+import { TelegramMediaClient } from './channels/telegram/telegram-media.client.js';
+import { TelegramMessagingClient } from './channels/telegram/telegram-messaging.client.js';
+import { MetaWhatsAppMediaClient } from './channels/whatsapp/meta-whatsapp-media.client.js';
+import { LocalMediaClient } from './channels/local/local-media.client.js';
+import { MESSAGING_CLIENT } from './channels/messaging.client.js';
+import { MessagingRouter } from './channels/messaging.router.js';
+import { MetaWhatsAppMessagingClient } from './channels/whatsapp/meta-whatsapp-messaging.client.js';
+import { LocalMessagingClient } from './channels/local/local-messaging.client.js';
 
 @Module({
   imports: [SecurityModule],
@@ -87,20 +91,32 @@ import { LocalWhatsAppMessagingClient } from './whatsapp/local-whatsapp-messagin
     { provide: LLM_NORMALIZATION_PROVIDER, useExisting: OpenAiLlmProvider },
     { provide: LLM_QUERY_PROVIDER, useExisting: OpenAiLlmProvider },
     {
-      provide: WHATSAPP_MEDIA_CLIENT,
+      provide: MEDIA_CLIENT,
       inject: [ReceiptConfigService],
-      useFactory: (config: ReceiptConfigService) =>
-        config.mediaSource === 'local'
-          ? new LocalWhatsAppMediaClient(config)
-          : new MetaWhatsAppMediaClient(config),
+      useFactory: (config: ReceiptConfigService): MediaRouter => {
+        if (config.mediaSource === 'local') {
+          const local = new LocalMediaClient(config);
+          return new MediaRouter(local, local);
+        }
+        return new MediaRouter(
+          new MetaWhatsAppMediaClient(config),
+          new TelegramMediaClient(config),
+        );
+      },
     },
     {
-      provide: WHATSAPP_MESSAGING_CLIENT,
+      provide: MESSAGING_CLIENT,
       inject: [ReceiptConfigService],
-      useFactory: (config: ReceiptConfigService) =>
-        config.messagingSource === 'local'
-          ? new LocalWhatsAppMessagingClient()
-          : new MetaWhatsAppMessagingClient(config),
+      useFactory: (config: ReceiptConfigService): MessagingRouter => {
+        if (config.messagingSource === 'local') {
+          const local = new LocalMessagingClient();
+          return new MessagingRouter(local, local);
+        }
+        return new MessagingRouter(
+          new MetaWhatsAppMessagingClient(config),
+          new TelegramMessagingClient(config),
+        );
+      },
     },
   ],
 })

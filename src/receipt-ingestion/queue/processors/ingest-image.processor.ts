@@ -10,10 +10,7 @@ import { ReceiptImagesRepository } from '../../repository/receipt-images.reposit
 import { ReceiptStorageService } from '../../storage/receipt-storage.service.js';
 import { buildStoragePath } from '../../utils/storage-path.js';
 import { maskSenderAddress } from '../../utils/sender-address.js';
-import {
-  WHATSAPP_MEDIA_CLIENT,
-  type WhatsAppMediaClient,
-} from '../../whatsapp/whatsapp-media.client.js';
+import { MEDIA_CLIENT, type MediaClient } from '../../channels/media.client.js';
 import { ReceiptQueueService } from '../receipt-queue.service.js';
 import type { IngestImageJobPayload } from '../receipt-queue.constants.js';
 import type {
@@ -33,8 +30,8 @@ export class IngestImageProcessor {
   private readonly logger = new Logger(IngestImageProcessor.name);
 
   constructor(
-    @Inject(WHATSAPP_MEDIA_CLIENT)
-    private readonly media: WhatsAppMediaClient,
+    @Inject(MEDIA_CLIENT)
+    private readonly media: MediaClient,
     private readonly images: ImageProcessorService,
     private readonly storage: ReceiptStorageService,
     private readonly groupService: ReceiptGroupService,
@@ -49,7 +46,10 @@ export class IngestImageProcessor {
       return { outcome: 'duplicate_message' };
     }
 
-    const downloaded = await this.media.download(payload.mediaId);
+    const downloaded = await this.media.download(
+      payload.mediaId,
+      payload.senderAddress,
+    );
     const processed = await this.images.toWebp(downloaded.buffer);
 
     if (
