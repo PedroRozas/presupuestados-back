@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { SecurityModule } from '../security/security.module.js';
 import { ReceiptConfigService } from './receipt.config.js';
 import { WebhookController } from './webhook/webhook.controller.js';
+import { TelegramWebhookController } from './telegram/telegram-webhook.controller.js';
 import { ReceiptsController } from './api/receipts.controller.js';
 import { ReceiptsService } from './api/receipts.service.js';
 import { ReceiptQueryRepository } from './repository/receipt-query.repository.js';
@@ -46,7 +47,11 @@ import { LocalWhatsAppMessagingClient } from './whatsapp/local-whatsapp-messagin
 
 @Module({
   imports: [SecurityModule],
-  controllers: [WebhookController, ReceiptsController],
+  controllers: [
+    WebhookController,
+    TelegramWebhookController,
+    ReceiptsController,
+  ],
   providers: [
     ReceiptsService,
     ReceiptQueryRepository,

@@ -5,9 +5,11 @@ import {
   RECEIPT_MESSAGING_SOURCE_DEFAULT,
 } from './receipt.constants.js';
 
-export type ReceiptMediaSource = 'meta' | 'local';
+export type ReceiptChannelSource = 'real' | 'local';
 
-export type ReceiptMessagingSource = 'meta' | 'local';
+export type ReceiptMediaSource = ReceiptChannelSource;
+
+export type ReceiptMessagingSource = ReceiptChannelSource;
 
 @Injectable()
 export class ReceiptConfigService {
@@ -48,7 +50,7 @@ export class ReceiptConfigService {
       'RECEIPT_MEDIA_SOURCE',
       RECEIPT_DEFAULTS.mediaSource,
     );
-    return value === 'local' ? 'local' : 'meta';
+    return value === 'local' ? 'local' : 'real';
   }
 
   get messagingSource(): ReceiptMessagingSource {
@@ -56,7 +58,24 @@ export class ReceiptConfigService {
       'RECEIPT_MESSAGING_SOURCE',
       RECEIPT_MESSAGING_SOURCE_DEFAULT,
     );
-    return value === 'local' ? 'local' : 'meta';
+    return value === 'local' ? 'local' : 'real';
+  }
+
+  get telegramBotToken(): string {
+    return this.configService.getOrThrow<string>('RECEIPT_TELEGRAM_BOT_TOKEN');
+  }
+
+  get telegramWebhookSecret(): string {
+    return this.configService.getOrThrow<string>(
+      'RECEIPT_TELEGRAM_WEBHOOK_SECRET',
+    );
+  }
+
+  get telegramApiBaseUrl(): string {
+    return this.getString(
+      'RECEIPT_TELEGRAM_API_BASE_URL',
+      RECEIPT_DEFAULTS.telegramApiBaseUrl,
+    );
   }
 
   get localMediaDir(): string {
