@@ -1,4 +1,8 @@
 import { z } from 'zod';
+import type {
+  IncomingMessage,
+  IncomingMessageBase,
+} from './incoming-message.js';
 
 const MILLISECONDS_PER_SECOND = 1000;
 
@@ -68,27 +72,6 @@ export const metaWebhookSchema = z.object({
 export type MetaWebhookPayload = z.infer<typeof metaWebhookSchema>;
 type MetaMessage = z.infer<typeof messageSchema>;
 
-interface IncomingMessageBase {
-  channelMessageId: string;
-  senderAddress: string;
-  receivedAt: Date;
-}
-
-export interface IncomingImageMessage extends IncomingMessageBase {
-  kind: 'image';
-  mediaId: string;
-  mimeType: string | undefined;
-}
-
-export interface IncomingTextMessage extends IncomingMessageBase {
-  kind: 'text';
-  body: string;
-}
-
-export type IncomingWhatsAppMessage =
-  | IncomingImageMessage
-  | IncomingTextMessage;
-
 const toE164 = (from: string): string =>
   from.startsWith('+') ? from : `+${from}`;
 
@@ -105,7 +88,7 @@ const isTextMessage = (
 
 const toIncomingMessage = (
   message: MetaMessage,
-): IncomingWhatsAppMessage | undefined => {
+): IncomingMessage | undefined => {
   const base: IncomingMessageBase = {
     channelMessageId: message.id,
     senderAddress: toE164(message.from),
@@ -130,11 +113,9 @@ const toIncomingMessage = (
 
 export const extractIncomingMessages = (
   payload: MetaWebhookPayload,
-): IncomingWhatsAppMessage[] =>
+): IncomingMessage[] =>
   payload.entry
     .flatMap((entry) => entry.changes)
     .flatMap((change) => change.value.messages ?? [])
     .map(toIncomingMessage)
-    .filter(
-      (message): message is IncomingWhatsAppMessage => message !== undefined,
-    );
+    .filter((message): message is IncomingMessage => message !== undefined);

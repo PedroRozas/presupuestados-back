@@ -7,13 +7,11 @@ import {
 } from '../receipt.constants.js';
 import { AllowedSendersRepository } from '../repository/allowed-senders.repository.js';
 import { ReceiptQueueService } from '../queue/receipt-queue.service.js';
-import {
-  extractIncomingMessages,
-  type IncomingImageMessage,
-  type IncomingTextMessage,
-  type IncomingWhatsAppMessage,
-  type MetaWebhookPayload,
-} from '../schemas/meta-webhook.schema.js';
+import type {
+  IncomingImageMessage,
+  IncomingMessage,
+  IncomingTextMessage,
+} from '../schemas/incoming-message.js';
 import { maskSenderAddress } from '../utils/sender-address.js';
 import type { ReceiptAllowedSender } from '../../database/schema/index.js';
 
@@ -33,14 +31,13 @@ export class WebhookDispatchService {
     private readonly config: ReceiptConfigService,
   ) {}
 
-  async dispatch(payload: MetaWebhookPayload): Promise<void> {
-    const messages = extractIncomingMessages(payload);
+  async dispatch(messages: IncomingMessage[]): Promise<void> {
     for (const message of messages) {
       await this.dispatchOne(message);
     }
   }
 
-  private async dispatchOne(message: IncomingWhatsAppMessage): Promise<void> {
+  private async dispatchOne(message: IncomingMessage): Promise<void> {
     const sender = await this.allowedSenders.findEnabledByAddress(
       message.senderAddress,
     );
