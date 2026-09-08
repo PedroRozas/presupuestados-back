@@ -153,7 +153,7 @@ const buildTelegramRequest = (args: SimulatorArgs): OutgoingRequest => {
   const body = JSON.stringify({
     update_id: Date.now(),
     message: {
-      message_id: Date.now() % 1_000_000,
+      message_id: Date.now(),
       date: nowSeconds(),
       chat: { id: userId, type: 'private' },
       from: { id: userId, is_bot: false },

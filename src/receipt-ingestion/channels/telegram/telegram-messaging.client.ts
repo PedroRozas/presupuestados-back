@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ReceiptConfigService } from '../../receipt.config.js';
 import { TELEGRAM_TEXT_MAX_CHARS } from '../../receipt.constants.js';
-import { parseSenderAddress } from '../../utils/sender-address.js';
+import {
+  maskSenderAddress,
+  parseSenderAddress,
+} from '../../utils/sender-address.js';
 import type { MessagingClient } from '../messaging.client.js';
 import { TelegramApiError, type FetchLike } from './telegram-media.client.js';
 
@@ -26,7 +29,7 @@ export class TelegramMessagingClient implements MessagingClient {
     if (!response.ok) {
       throw new TelegramApiError('sendMessage', response.status);
     }
-    this.logger.log(`telegram_text_sent to=${toAddress}`);
+    this.logger.log(`telegram_text_sent to=${maskSenderAddress(toAddress)}`);
   }
 
   private truncate(body: string): string {

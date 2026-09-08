@@ -48,12 +48,12 @@ describe('MediaRouter', () => {
     expect(whatsapp.download).not.toHaveBeenCalled();
   });
 
-  it('propaga InvalidSenderAddressError sin llamar a ningún cliente', () => {
+  it('propaga InvalidSenderAddressError sin llamar a ningún cliente', async () => {
     const whatsapp = buildMediaClient();
     const telegram = buildMediaClient();
-    expect(() =>
+    await expect(
       new MediaRouter(whatsapp.client, telegram.client).download('m1', 'bad'),
-    ).toThrow(InvalidSenderAddressError);
+    ).rejects.toBeInstanceOf(InvalidSenderAddressError);
     expect(whatsapp.download).not.toHaveBeenCalled();
   });
 });

@@ -14,16 +14,16 @@ RLS ya está activo en `storage.objects`. No se crea ninguna política para `ano
 
 ## 2. Allowlist y feature flag
 
-Una fila por persona autorizada. `phone_e164` con `+` y código de país. `user_id` es `profiles.id`; `couple_id` es `profiles.couple_id` de esa persona.
+Una fila por persona autorizada. `sender_address` es la dirección del remitente: teléfono E.164 con `+` para WhatsApp (`+56957598006`) o `tg:<id>` para Telegram (`tg:123456789`). `user_id` es `profiles.id`; `couple_id` es `profiles.couple_id` de esa persona.
 
 ```sql
-insert into receipt_allowed_senders (phone_e164, user_id, couple_id)
+insert into receipt_allowed_senders (sender_address, user_id, couple_id)
 select '+569XXXXXXXX', p.id, p.couple_id
 from profiles p
 where p.email = 'correo@ejemplo.com';
 ```
 
-Deshabilitar sin borrar: `update receipt_allowed_senders set enabled = false where phone_e164 = '+569XXXXXXXX';`
+Deshabilitar sin borrar: `update receipt_allowed_senders set enabled = false where sender_address = '+569XXXXXXXX';`
 
 ## 3. App de Meta y WhatsApp Cloud API
 
@@ -71,9 +71,9 @@ El barrido reencola `extract-group` para grupos `extracting` cuya extracción nu
 
 1. `RECEIPT_MEDIA_SOURCE=local` y `RECEIPT_LOCAL_MEDIA_DIR=./tmp/receipt-media` en `.env`.
 2. Copiar una foto de boleta a `tmp/receipt-media/boleta-1.jpg`.
-3. Insertar en `receipt_allowed_senders` el número simulado, por defecto `+56900000000` (configurable con `RECEIPT_SIMULATE_PHONE`).
+3. Insertar en `receipt_allowed_senders` el número simulado, por defecto `+56900000000` (configurable con `RECEIPT_SIMULATE_SENDER`; para Telegram, `tg:100000000`).
 4. `npm run start:dev`.
-5. `npm run receipts:simulate -- boleta-1.jpg` (usa `RECEIPT_SIMULATE_PHONE` y `RECEIPT_SIMULATE_BASE_URL`, este último por defecto `http://localhost:3000`).
+5. `npm run receipts:simulate -- boleta-1.jpg` (usa `RECEIPT_SIMULATE_SENDER` y `RECEIPT_SIMULATE_BASE_URL`, este último por defecto `http://localhost:3000`).
 6. Verificar en logs `job_enqueued`, luego `image_stored`, y en Supabase: fila en `receipt_images`, objeto `.webp` en el bucket.
 7. `npm run receipts:simulate -- --text "listo"` cierra el grupo abierto de inmediato. Verificar en logs `group_closed`, luego `job_enqueued name=extract-group` y `extraction_done group=... status=ready|needs_review items=N tokens=I/O`, luego `job_enqueued name=normalize-group` y `normalize_group_done group=... merchant=matched|created matched=N created=N`, y el aviso final `text_local ... body="Boleta lista: ..."` o `"... necesita revisión ..."`. En la base, `select description_raw, category, qty, unit_price, amount, confidence, position from receipt_items where group_id = '<id>' order by position;` debe listar los ítems extraídos.
 8. Verificar la normalización en la base:
@@ -197,7 +197,7 @@ Telegram no exige verificación del negocio, así que es el canal activo mientra
 
 **Onboarding de un remitente.** Escribir cualquier cosa al bot desde el celular. El log mostrará `sender_not_allowed sender=tg:123456789`; insertar esa dirección en `receipt_allowed_senders` con el `user_id` y `couple_id` de la persona y `enabled = true`. Desde ese momento el bot responde.
 
-**Qué acepta el bot.** Solo chats privados de personas (no grupos ni bots). Fotos (`photo`, se toma el tamaño mayor), imágenes enviadas como archivo (`document` con mime `image/*`) y texto. Texto `listo` cierra el grupo; cualquier otro texto es una consulta al chat. Stickers, audios y `edited_message` se ignoran con 200.
+**Qué acepta el bot.** Solo chats privados de personas (no grupos ni bots). Fotos (`photo`, se toma el tamaño mayor), imágenes enviadas como archivo (`document` con mime `image/*`) y texto. Texto `listo` cierra el grupo; cualquier otro texto es una consulta al chat. Stickers, audios y `edited_message` se ignoran con 200. El texto que acompaña a una foto (`caption`) también se ignora, igual que en WhatsApp: `listo` y las preguntas van como mensaje aparte, porque un comando simultáneo a la foto llegaría antes de que la imagen termine de procesarse.
 
 **Calidad de imagen.** Telegram recomprime las fotos normales a un máximo de 1280 px de lado. Para boletas largas o poco legibles, enviarlas "como archivo" conserva la resolución original.
 

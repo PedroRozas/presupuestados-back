@@ -7,9 +7,9 @@ export class MessagingRouter implements MessagingClient {
     private readonly telegram: MessagingClient,
   ) {}
 
-  sendText(toAddress: string, body: string): Promise<void> {
+  async sendText(toAddress: string, body: string): Promise<void> {
     const { channel } = parseSenderAddress(toAddress);
     const client = channel === 'telegram' ? this.telegram : this.whatsapp;
-    return client.sendText(toAddress, body);
+    return await client.sendText(toAddress, body);
   }
 }

@@ -23,10 +23,10 @@ const documentSchema = z.object({
 });
 
 const telegramMessageSchema = z.object({
-  message_id: z.number(),
-  date: z.number(),
-  chat: z.object({ id: z.number(), type: z.string() }),
-  from: z.object({ id: z.number(), is_bot: z.boolean() }).optional(),
+  message_id: z.number().int(),
+  date: z.number().int(),
+  chat: z.object({ id: z.number().int(), type: z.string() }),
+  from: z.object({ id: z.number().int(), is_bot: z.boolean() }).optional(),
   text: z.string().optional(),
   photo: z.array(photoSizeSchema).optional(),
   document: documentSchema.optional(),
@@ -42,6 +42,9 @@ export const telegramUpdateSchema = z
 export type TelegramUpdate = z.infer<typeof telegramUpdateSchema>;
 type TelegramMessage = z.infer<typeof telegramMessageSchema>;
 type PhotoSize = z.infer<typeof photoSizeSchema>;
+type HumanTelegramMessage = TelegramMessage & {
+  from: NonNullable<TelegramMessage['from']>;
+};
 
 const largestPhoto = (photos: PhotoSize[]): PhotoSize | undefined =>
   photos.reduce<PhotoSize | undefined>((best, photo) => {
@@ -49,7 +52,9 @@ const largestPhoto = (photos: PhotoSize[]): PhotoSize | undefined =>
     return (photo.file_size ?? 0) >= (best.file_size ?? 0) ? photo : best;
   }, undefined);
 
-const isFromAllowedHuman = (message: TelegramMessage): boolean =>
+const isFromAllowedHuman = (
+  message: TelegramMessage,
+): message is HumanTelegramMessage =>
   message.chat.type === PRIVATE_CHAT_TYPE &&
   message.from !== undefined &&
   !message.from.is_bot;
@@ -57,7 +62,7 @@ const isFromAllowedHuman = (message: TelegramMessage): boolean =>
 const toIncomingMessage = (
   message: TelegramMessage,
 ): IncomingMessage | undefined => {
-  if (!isFromAllowedHuman(message) || !message.from) return undefined;
+  if (!isFromAllowedHuman(message)) return undefined;
   const base: IncomingMessageBase = {
     channelMessageId: `${message.chat.id}:${message.message_id}`,
     senderAddress: telegramAddress(message.from.id),

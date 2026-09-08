@@ -7,9 +7,12 @@ export class MediaRouter implements MediaClient {
     private readonly telegram: MediaClient,
   ) {}
 
-  download(mediaId: string, senderAddress: string): Promise<DownloadedMedia> {
+  async download(
+    mediaId: string,
+    senderAddress: string,
+  ): Promise<DownloadedMedia> {
     const { channel } = parseSenderAddress(senderAddress);
     const client = channel === 'telegram' ? this.telegram : this.whatsapp;
-    return client.download(mediaId, senderAddress);
+    return await client.download(mediaId, senderAddress);
   }
 }
