@@ -15,7 +15,7 @@ describe('AnswerQueryProcessor', () => {
     );
 
     await processor.process({
-      senderPhoneE164: '+56912345678',
+      senderAddress: '+56912345678',
       coupleId: 'c1',
       message: '¿cuánto gasté?',
     });
@@ -25,7 +25,7 @@ describe('AnswerQueryProcessor', () => {
       message: '¿cuánto gasté?',
     });
     expect(queue.enqueueNotifyUser).toHaveBeenCalledWith({
-      toPhoneE164: '+56912345678',
+      toAddress: '+56912345678',
       body: 'Gastaste $1.000',
     });
   });
@@ -42,13 +42,13 @@ describe('AnswerQueryProcessor', () => {
 
     await expect(
       processor.process({
-        senderPhoneE164: '+56912345678',
+        senderAddress: '+56912345678',
         coupleId: 'c1',
         message: 'q',
       }),
     ).resolves.toBeUndefined();
     expect(queue.enqueueNotifyUser).toHaveBeenCalledWith({
-      toPhoneE164: '+56912345678',
+      toAddress: '+56912345678',
       body: QUERY_UNRESOLVED_MESSAGE,
     });
   });

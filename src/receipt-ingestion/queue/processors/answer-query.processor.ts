@@ -3,7 +3,7 @@ import {
   QUERY_UNRESOLVED_MESSAGE,
   ReceiptQueryService,
 } from '../../query/receipt-query.service.js';
-import { maskPhone } from '../../utils/mask-phone.js';
+import { maskSenderAddress } from '../../utils/sender-address.js';
 import type { AnswerQueryJobPayload } from '../receipt-queue.constants.js';
 import { ReceiptQueueService } from '../receipt-queue.service.js';
 
@@ -19,11 +19,11 @@ export class AnswerQueryProcessor {
   async process(payload: AnswerQueryJobPayload): Promise<void> {
     const answer = await this.answerOrFallback(payload);
     await this.queue.enqueueNotifyUser({
-      toPhoneE164: payload.senderPhoneE164,
+      toAddress: payload.senderAddress,
       body: answer,
     });
     this.logger.log(
-      `answer_query_done couple=${payload.coupleId} phone=${maskPhone(payload.senderPhoneE164)}`,
+      `answer_query_done couple=${payload.coupleId} sender=${maskSenderAddress(payload.senderAddress)}`,
     );
   }
 

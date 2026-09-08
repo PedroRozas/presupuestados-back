@@ -45,7 +45,7 @@ export class ReceiptGroupsRepository {
   ) {}
 
   async findOpenBySender(
-    senderPhoneE164: string,
+    senderAddress: string,
     coupleId: string,
   ): Promise<ReceiptGroup | undefined> {
     const rows = await this.db
@@ -53,7 +53,7 @@ export class ReceiptGroupsRepository {
       .from(receiptGroups)
       .where(
         and(
-          eq(receiptGroups.senderPhoneE164, senderPhoneE164),
+          eq(receiptGroups.senderAddress, senderAddress),
           eq(receiptGroups.coupleId, coupleId),
           eq(receiptGroups.status, 'collecting'),
         ),

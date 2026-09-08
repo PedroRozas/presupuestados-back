@@ -11,7 +11,7 @@ const group = (overrides: Partial<ReceiptGroup>): ReceiptGroup =>
   ({
     id: 'group-1',
     coupleId: 'couple-1',
-    senderPhoneE164: '+56912345678',
+    senderAddress: '+56912345678',
     status: 'extracting',
     ...overrides,
   }) as ReceiptGroup;
@@ -60,7 +60,7 @@ describe('StaleGroupSweeperService', () => {
       id: 'g-collecting',
       status: 'collecting',
       coupleId: 'couple-2',
-      senderPhoneE164: '+56987654321',
+      senderAddress: '+56987654321',
     });
     const { service, groups, queue, images } = build({
       staleExtracting: [extractingGroup],
@@ -78,7 +78,7 @@ describe('StaleGroupSweeperService', () => {
     expect(queue.enqueueExtractGroup).toHaveBeenCalledWith({
       groupId: 'g-extracting',
       coupleId: 'couple-1',
-      senderPhoneE164: '+56912345678',
+      senderAddress: '+56912345678',
     });
     expect(images.nextPageIndex).toHaveBeenCalledWith('g-collecting');
     expect(queue.enqueueCloseGroup).toHaveBeenCalledTimes(1);

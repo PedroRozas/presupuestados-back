@@ -15,10 +15,10 @@ const buildConfig = (): ReceiptConfigService =>
   }) as unknown as ReceiptConfigService;
 
 const buildPayload = (): IngestImageJobPayload => ({
-  waMessageId: 'wamid.1',
+  channelMessageId: 'wamid.1',
   mediaId: 'media-1',
   mimeType: 'image/jpeg',
-  senderPhoneE164: '+56912345678',
+  senderAddress: '+56912345678',
   senderUserId: 'u1',
   coupleId: 'c1',
   receivedAtIso: new Date(0).toISOString(),
@@ -39,6 +39,16 @@ describe('ReceiptQueueService', () => {
 });
 
 describe('buildCloseGroupJobId', () => {
+  it('quita los dos puntos de una dirección de Telegram (BullMQ los prohíbe)', () => {
+    expect(
+      buildCloseGroupJobId({
+        kind: 'command',
+        coupleId: 'c1',
+        senderAddress: 'tg:123456789',
+      }),
+    ).toBe('close-c1-tg123456789-command');
+  });
+
   it('usa grupo y página para cierres por ventana', () => {
     expect(
       buildCloseGroupJobId({ kind: 'window', groupId: 'g1', pageIndex: 3 }),
@@ -49,7 +59,7 @@ describe('buildCloseGroupJobId', () => {
     expect(
       buildCloseGroupJobId({
         kind: 'command',
-        senderPhoneE164: '+56912345678',
+        senderAddress: '+56912345678',
         coupleId: 'c1',
       }),
     ).toBe('close-c1-56912345678-command');

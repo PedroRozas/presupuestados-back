@@ -6,7 +6,10 @@ import type { AllowedSendersRepository } from '../repository/allowed-senders.rep
 import type { ReceiptQueueService } from '../queue/receipt-queue.service.js';
 import type { RedisService } from '../../security/redis.service.js';
 import type { ReceiptConfigService } from '../receipt.config.js';
-import type { MetaWebhookPayload } from '../schemas/meta-webhook.schema.js';
+import {
+  extractIncomingMessages,
+  type MetaWebhookPayload,
+} from '../schemas/meta-webhook.schema.js';
 
 const PHONE = '56912345678';
 
@@ -44,12 +47,12 @@ describe('WebhookDispatchService', () => {
     rateLimitCount?: number;
   }) => {
     const allowedSenders = {
-      findEnabledByPhone: jest.fn(() =>
+      findEnabledByAddress: jest.fn(() =>
         Promise.resolve(
           options.sender
             ? {
                 id: 's1',
-                phoneE164: `+${PHONE}`,
+                senderAddress: `+${PHONE}`,
                 enabled: true,
                 createdAt: new Date(),
                 ...options.sender,
@@ -90,13 +93,15 @@ describe('WebhookDispatchService', () => {
       sender: { userId: 'u1', coupleId: 'c1' },
     });
 
-    await service.dispatch(buildPayload([imageMessage('wamid.1')]));
+    await service.dispatch(
+      extractIncomingMessages(buildPayload([imageMessage('wamid.1')])),
+    );
 
     expect(queue.enqueueIngestImage).toHaveBeenCalledWith({
-      waMessageId: 'wamid.1',
+      channelMessageId: 'wamid.1',
       mediaId: 'media-wamid.1',
       mimeType: 'image/jpeg',
-      senderPhoneE164: `+${PHONE}`,
+      senderAddress: `+${PHONE}`,
       senderUserId: 'u1',
       coupleId: 'c1',
       receivedAtIso: new Date(1725300000 * 1000).toISOString(),
@@ -106,7 +111,9 @@ describe('WebhookDispatchService', () => {
   it('descarta en silencio a un remitente desconocido', async () => {
     const { service, queue } = buildService({ sender: undefined });
 
-    await service.dispatch(buildPayload([imageMessage('wamid.1')]));
+    await service.dispatch(
+      extractIncomingMessages(buildPayload([imageMessage('wamid.1')])),
+    );
 
     expect(queue.enqueueIngestImage).not.toHaveBeenCalled();
   });
@@ -117,7 +124,9 @@ describe('WebhookDispatchService', () => {
       rateLimitCount: 21,
     });
 
-    await service.dispatch(buildPayload([imageMessage('wamid.1')]));
+    await service.dispatch(
+      extractIncomingMessages(buildPayload([imageMessage('wamid.1')])),
+    );
 
     expect(queue.enqueueIngestImage).not.toHaveBeenCalled();
   });
@@ -128,15 +137,17 @@ describe('WebhookDispatchService', () => {
     });
 
     await service.dispatch(
-      buildPayload([
-        {
-          id: 'wamid.t',
-          from: PHONE,
-          timestamp: '1',
-          type: 'text',
-          text: { body: '   ' },
-        },
-      ]),
+      extractIncomingMessages(
+        buildPayload([
+          {
+            id: 'wamid.t',
+            from: PHONE,
+            timestamp: '1',
+            type: 'text',
+            text: { body: '   ' },
+          },
+        ]),
+      ),
     );
 
     expect(queue.enqueueIngestImage).not.toHaveBeenCalled();
@@ -150,19 +161,21 @@ describe('WebhookDispatchService', () => {
     });
 
     await service.dispatch(
-      buildPayload([
-        {
-          id: 'wamid.t',
-          from: PHONE,
-          timestamp: '1',
-          type: 'text',
-          text: { body: '  Listo ' },
-        },
-      ]),
+      extractIncomingMessages(
+        buildPayload([
+          {
+            id: 'wamid.t',
+            from: PHONE,
+            timestamp: '1',
+            type: 'text',
+            text: { body: '  Listo ' },
+          },
+        ]),
+      ),
     );
 
     expect(queue.enqueueCloseGroup).toHaveBeenCalledWith(
-      { kind: 'command', senderPhoneE164: `+${PHONE}`, coupleId: 'c1' },
+      { kind: 'command', senderAddress: `+${PHONE}`, coupleId: 'c1' },
       0,
     );
     expect(queue.enqueueIngestImage).not.toHaveBeenCalled();
@@ -174,23 +187,51 @@ describe('WebhookDispatchService', () => {
     });
 
     await service.dispatch(
-      buildPayload([
-        {
-          id: 'wamid.t',
-          from: PHONE,
-          timestamp: '1',
-          type: 'text',
-          text: { body: 'hola' },
-        },
-      ]),
+      extractIncomingMessages(
+        buildPayload([
+          {
+            id: 'wamid.t',
+            from: PHONE,
+            timestamp: '1',
+            type: 'text',
+            text: { body: 'hola' },
+          },
+        ]),
+      ),
     );
 
     expect(queue.enqueueCloseGroup).not.toHaveBeenCalled();
     expect(queue.enqueueAnswerQuery).toHaveBeenCalledWith({
-      senderPhoneE164: `+${PHONE}`,
+      senderAddress: `+${PHONE}`,
       coupleId: 'c1',
       message: 'hola',
     });
+  });
+
+  it('encola ingest-image para una dirección de Telegram autorizada', async () => {
+    const { service, queue } = buildService({
+      sender: { userId: 'u1', coupleId: 'c1' },
+    });
+
+    await service.dispatch([
+      {
+        kind: 'image',
+        channelMessageId: '123456789:42',
+        senderAddress: 'tg:123456789',
+        receivedAt: new Date('2026-09-07T12:00:00.000Z'),
+        mediaId: 'file-1',
+        mimeType: 'image/jpeg',
+      },
+    ]);
+
+    expect(queue.enqueueIngestImage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        senderAddress: 'tg:123456789',
+        channelMessageId: '123456789:42',
+        mediaId: 'file-1',
+        coupleId: 'c1',
+      }),
+    );
   });
 });
 

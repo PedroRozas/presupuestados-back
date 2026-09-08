@@ -12,7 +12,10 @@ import {
 } from '@nestjs/common';
 import { timingSafeEqual } from 'node:crypto';
 import { ReceiptConfigService } from '../receipt.config.js';
-import { metaWebhookSchema } from '../schemas/meta-webhook.schema.js';
+import {
+  extractIncomingMessages,
+  metaWebhookSchema,
+} from '../schemas/meta-webhook.schema.js';
 import { WebhookDispatchService } from './webhook-dispatch.service.js';
 import { WebhookSignatureGuard } from './webhook-signature.guard.js';
 
@@ -64,7 +67,8 @@ export class WebhookController {
       return { received: true };
     }
 
-    await this.dispatchService.dispatch(parsed.data);
+    this.logger.log('webhook_received');
+    await this.dispatchService.dispatch(extractIncomingMessages(parsed.data));
     return { received: true };
   }
 }

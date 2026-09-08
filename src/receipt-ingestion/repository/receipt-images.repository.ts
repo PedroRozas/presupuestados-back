@@ -22,11 +22,11 @@ export class ReceiptImagesRepository {
     @Inject(DRIZZLE) private readonly db: NodePgDatabase<typeof schema>,
   ) {}
 
-  async existsByMessageId(waMessageId: string): Promise<boolean> {
+  async existsByMessageId(channelMessageId: string): Promise<boolean> {
     const rows = await this.db
       .select({ id: receiptImages.id })
       .from(receiptImages)
-      .where(eq(receiptImages.waMessageId, waMessageId))
+      .where(eq(receiptImages.channelMessageId, channelMessageId))
       .limit(1);
     return rows.length > 0;
   }

@@ -52,7 +52,7 @@ export class StaleGroupSweeperService {
       await this.queue.enqueueExtractGroup({
         groupId: group.id,
         coupleId: group.coupleId,
-        senderPhoneE164: group.senderPhoneE164,
+        senderAddress: group.senderAddress,
       });
     }
     return staleGroups.length;

@@ -1,6 +1,6 @@
 import { IngestImageProcessor } from './ingest-image.processor.js';
 import type { IngestImageJobPayload } from '../receipt-queue.constants.js';
-import type { WhatsAppMediaClient } from '../../whatsapp/whatsapp-media.client.js';
+import type { MediaClient } from '../../channels/media.client.js';
 import type { ImageProcessorService } from '../../media/image-processor.service.js';
 import type { ReceiptStorageService } from '../../storage/receipt-storage.service.js';
 import type { ReceiptGroupService } from '../../groups/receipt-group.service.js';
@@ -10,10 +10,10 @@ import type { ReceiptQueueService } from '../receipt-queue.service.js';
 import type { ReceiptConfigService } from '../../receipt.config.js';
 
 const payload: IngestImageJobPayload = {
-  waMessageId: 'wamid.1',
+  channelMessageId: 'wamid.1',
   mediaId: 'media-1',
   mimeType: 'image/jpeg',
-  senderPhoneE164: '+56912345678',
+  senderAddress: '+56912345678',
   senderUserId: 'user-1',
   coupleId: 'couple-1',
   receivedAtIso: '2026-03-05T23:30:00.000Z',
@@ -70,7 +70,7 @@ const buildProcessor = (overrides: {
   const config = { groupWindowSeconds: 90 } as ReceiptConfigService;
 
   const processor = new IngestImageProcessor(
-    media as unknown as WhatsAppMediaClient,
+    media as unknown as MediaClient,
     images as unknown as ImageProcessorService,
     storage as unknown as ReceiptStorageService,
     groupService as unknown as ReceiptGroupService,
@@ -115,7 +115,7 @@ describe('IngestImageProcessor', () => {
       expect.objectContaining({
         groupId: 'group-1',
         coupleId: 'couple-1',
-        waMessageId: 'wamid.1',
+        channelMessageId: 'wamid.1',
         senderUserId: 'user-1',
         storageBucket: 'receipts',
         storagePath: 'couple-1/2026/03/group-1/2.webp',

@@ -1,9 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { ReceiptConfigService } from '../receipt.config.js';
-import type {
-  DownloadedMedia,
-  WhatsAppMediaClient,
-} from './whatsapp-media.client.js';
+import { ReceiptConfigService } from '../../receipt.config.js';
+import type { DownloadedMedia, MediaClient } from '../media.client.js';
 
 const GRAPH_BASE_URL = 'https://graph.facebook.com';
 const DEFAULT_MIME_TYPE = 'application/octet-stream';
@@ -21,7 +18,7 @@ export class WhatsAppMediaDownloadError extends Error {
 }
 
 @Injectable()
-export class MetaWhatsAppMediaClient implements WhatsAppMediaClient {
+export class MetaWhatsAppMediaClient implements MediaClient {
   constructor(private readonly config: ReceiptConfigService) {}
 
   async download(mediaId: string): Promise<DownloadedMedia> {

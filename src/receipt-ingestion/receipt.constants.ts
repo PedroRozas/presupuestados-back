@@ -102,6 +102,7 @@ export const RECEIPT_DEFAULTS = {
   normalizationReasoningEffort: 'minimal',
   extractionTemperature: 0,
   sweepIntervalMinutes: 10,
+  telegramApiBaseUrl: 'https://api.telegram.org',
   staleExtractingMinutes: 30,
   queryMaxOutputTokens: 800,
   queryMaxToolRounds: 3,
@@ -132,6 +133,8 @@ export const RECEIPT_CLOSE_JOB_ID_PREFIX = 'close';
 export const RECEIPT_CLOSE_COMMAND_JOB_SUFFIX = 'command';
 export const RECEIPT_CLOSE_RESCHEDULE_JOB_SUFFIX = 'r';
 export const RECEIPT_MESSAGING_SOURCE_DEFAULT = 'meta';
+export const TELEGRAM_SECRET_HEADER = 'x-telegram-bot-api-secret-token';
+export const TELEGRAM_TEXT_MAX_CHARS = 4096;
 
 export const RECEIPT_REVIEW_REASONS = {
   TOTAL_MISMATCH: 'total_mismatch',
