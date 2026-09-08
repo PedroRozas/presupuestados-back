@@ -39,6 +39,16 @@ describe('ReceiptQueueService', () => {
 });
 
 describe('buildCloseGroupJobId', () => {
+  it('quita los dos puntos de una dirección de Telegram (BullMQ los prohíbe)', () => {
+    expect(
+      buildCloseGroupJobId({
+        kind: 'command',
+        coupleId: 'c1',
+        senderAddress: 'tg:123456789',
+      }),
+    ).toBe('close-c1-tg123456789-command');
+  });
+
   it('usa grupo y página para cierres por ventana', () => {
     expect(
       buildCloseGroupJobId({ kind: 'window', groupId: 'g1', pageIndex: 3 }),

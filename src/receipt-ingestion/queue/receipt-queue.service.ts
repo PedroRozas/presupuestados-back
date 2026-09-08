@@ -34,8 +34,10 @@ export class ReceiptQueueUnavailableError extends Error {
 
 const MILLISECONDS_PER_MINUTE = 60000;
 
-const stripPlus = (senderAddress: string): string =>
-  senderAddress.replace(/^\+/, '');
+const JOB_ID_FORBIDDEN_CHARS = /[+:]/g;
+
+const jobIdSafeAddress = (senderAddress: string): string =>
+  senderAddress.replace(JOB_ID_FORBIDDEN_CHARS, '');
 
 export const buildCloseGroupJobId = (payload: CloseGroupJobPayload): string => {
   if (payload.kind === 'window') {
@@ -45,7 +47,7 @@ export const buildCloseGroupJobId = (payload: CloseGroupJobPayload): string => {
         : '';
     return `${RECEIPT_CLOSE_JOB_ID_PREFIX}-${payload.groupId}-${payload.pageIndex}${rescheduleSuffix}`;
   }
-  return `${RECEIPT_CLOSE_JOB_ID_PREFIX}-${payload.coupleId}-${stripPlus(payload.senderAddress)}-${RECEIPT_CLOSE_COMMAND_JOB_SUFFIX}`;
+  return `${RECEIPT_CLOSE_JOB_ID_PREFIX}-${payload.coupleId}-${jobIdSafeAddress(payload.senderAddress)}-${RECEIPT_CLOSE_COMMAND_JOB_SUFFIX}`;
 };
 
 export const buildCloseGroupJobOptions = (
