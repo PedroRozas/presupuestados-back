@@ -139,6 +139,21 @@ const build = (options: BuildOptions) => {
 describe('NormalizationService.normalizeGroup', () => {
   const input = { groupId: 'g1', coupleId: 'c1' };
 
+  it('no registra descuentos como productos del catálogo', async () => {
+    const { service, products, items } = build({
+      group: group(),
+      items: [
+        item({ descriptionRaw: '6% DESCUENTO SALCOBRAND', amount: '-1500' }),
+      ],
+    });
+    const result = await service.normalizeGroup(input);
+    expect(result).toMatchObject({
+      items: { matched: 0, created: 0, llmDecided: 0 },
+    });
+    expect(products.create).not.toHaveBeenCalled();
+    expect(items.setProduct).not.toHaveBeenCalled();
+  });
+
   it('crea merchant nuevo sin candidatos y resuelve dos ítems por trigram sin llamar al LLM', async () => {
     const { service, merchants, groups, products, items, provider } = build({
       group: group({ merchantRaw: 'Jumbo Nuevo' }),

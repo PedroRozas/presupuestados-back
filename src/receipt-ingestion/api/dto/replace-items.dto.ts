@@ -37,7 +37,6 @@ export class ReplaceItemDto {
   unitPrice?: number;
 
   @IsInt()
-  @Min(0)
   amount!: number;
 
   @IsOptional()

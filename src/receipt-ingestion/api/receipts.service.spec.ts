@@ -33,6 +33,7 @@ const group = (overrides: Partial<ReceiptGroup> = {}): ReceiptGroup =>
     id: 'g1',
     coupleId: 'c1',
     status: 'ready',
+    senderAddress: 'tg:12345',
     receiptDate: '2026-09-01',
     merchantId: 'm1',
     merchantRaw: 'JUMBO',
@@ -64,6 +65,7 @@ const item = (overrides: Partial<ReceiptItem> = {}): ReceiptItem =>
 const listRow = (id: string): GroupListRow => ({
   id,
   status: 'ready',
+  channel: 'telegram',
   receiptDate: '2026-09-01',
   merchantRaw: 'JUMBO',
   merchantName: 'JUMBO',

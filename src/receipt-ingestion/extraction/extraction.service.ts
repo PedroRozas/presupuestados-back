@@ -31,7 +31,7 @@ import {
 } from './extraction-output.schema.js';
 import { ExtractionUsageRepository } from './extraction-usage.repository.js';
 import { currentPeriodMonth } from './period-month.js';
-import { EXTRACTION_PROMPT_V1 } from './prompts/extraction-prompt.v1.js';
+import { EXTRACTION_PROMPT_V2 } from './prompts/extraction-prompt.v2.js';
 import { evaluateReview, type ReviewVerdict } from './review-rules.js';
 
 export interface ExtractGroupInput {
@@ -141,10 +141,10 @@ export class ExtractionService {
           buffer,
           contentType: RECEIPT_IMAGE_CONTENT_TYPE,
         })),
-        systemPrompt: EXTRACTION_PROMPT_V1.system,
-        userPrompt: EXTRACTION_PROMPT_V1.user,
-        outputJsonSchema: EXTRACTION_PROMPT_V1.outputJsonSchema,
-        schemaName: EXTRACTION_PROMPT_V1.schemaName,
+        systemPrompt: EXTRACTION_PROMPT_V2.system,
+        userPrompt: EXTRACTION_PROMPT_V2.user,
+        outputJsonSchema: EXTRACTION_PROMPT_V2.outputJsonSchema,
+        schemaName: EXTRACTION_PROMPT_V2.schemaName,
         maxOutputTokens: this.config.extractionMaxOutputTokens,
         timeoutMs: this.config.extractionTimeoutMs,
       });
@@ -167,7 +167,7 @@ export class ExtractionService {
       groupId: group.id,
       coupleId: group.coupleId,
       model: usage.model,
-      promptVersion: EXTRACTION_PROMPT_V1.version,
+      promptVersion: EXTRACTION_PROMPT_V2.version,
       rawJson: result.rawText ? { raw_text: result.rawText } : null,
       tokensIn: usage.tokensIn,
       tokensOut: usage.tokensOut,
@@ -224,7 +224,7 @@ export class ExtractionService {
       groupId: group.id,
       coupleId: group.coupleId,
       model: result.model,
-      promptVersion: EXTRACTION_PROMPT_V1.version,
+      promptVersion: EXTRACTION_PROMPT_V2.version,
       rawJson: parsed,
       confidence: String(parsed.confidence),
       tokensIn: result.tokensIn,

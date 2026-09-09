@@ -1,4 +1,5 @@
 import { evaluateReview } from './review-rules.js';
+import { salcobrandReceipt } from './fixtures/salcobrand.js';
 import type { ExtractionOutput } from './extraction-output.schema.js';
 
 const thresholds = { minConfidence: 0.85, totalToleranceClp: 50 };
@@ -34,6 +35,20 @@ const output = (overrides: Partial<ExtractionOutput>): ExtractionOutput => ({
 });
 
 describe('evaluateReview', () => {
+  it('mantiene pendiente Salcobrand si se omiten descuentos o se duplica el total ahorrado', () => {
+    const missingDiscounts = salcobrandReceipt.items.filter(
+      (item) => item.amount > 0,
+    );
+    const doubleDiscounts = [
+      ...salcobrandReceipt.items,
+      { ...salcobrandReceipt.items[1], amount: -4236 },
+    ];
+    for (const items of [missingDiscounts, doubleDiscounts]) {
+      expect(
+        evaluateReview({ ...salcobrandReceipt, items }, thresholds),
+      ).toEqual({ status: 'needs_review', reasons: ['total_mismatch'] });
+    }
+  });
   it('marca ready cuando todo cuadra', () => {
     expect(evaluateReview(output({}), thresholds)).toEqual({
       status: 'ready',

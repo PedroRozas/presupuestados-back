@@ -1,3 +1,7 @@
+import {
+  parseSenderAddress,
+  type SenderChannel,
+} from '../utils/sender-address.js';
 import type {
   ReceiptExtraction,
   ReceiptGroup,
@@ -21,6 +25,7 @@ export interface ReceiptAccessDto {
 export interface ReceiptGroupSummaryDto {
   id: string;
   status: ReceiptGroupStatus;
+  channel: SenderChannel;
   receiptDate: string | null;
   merchantRaw: string | null;
   merchantName: string | null;
@@ -88,6 +93,7 @@ export interface SignedImage {
 export const mapGroupSummary = (row: GroupListRow): ReceiptGroupSummaryDto => ({
   id: row.id,
   status: row.status,
+  channel: row.channel,
   receiptDate: row.receiptDate,
   merchantRaw: row.merchantRaw,
   merchantName: row.merchantName,
@@ -163,6 +169,7 @@ export interface DetailParts {
 export const mapDetail = (parts: DetailParts): ReceiptGroupDetailDto => ({
   id: parts.group.id,
   status: parts.group.status,
+  channel: parseSenderAddress(parts.group.senderAddress).channel,
   receiptDate: parts.group.receiptDate,
   merchantRaw: parts.group.merchantRaw,
   merchantName: parts.merchantName,

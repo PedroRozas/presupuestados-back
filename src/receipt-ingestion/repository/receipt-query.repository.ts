@@ -3,12 +3,14 @@ import { sql, type SQL } from 'drizzle-orm';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { DRIZZLE } from '../../database/database.module.js';
 import * as schema from '../../database/schema/index.js';
+import type { SenderChannel } from '../utils/sender-address.js';
 import { RECEIPT_PERIOD_TIME_ZONE } from '../receipt.constants.js';
 import type { ReceiptGroupStatus } from '../receipt.constants.js';
 
 export interface GroupListRow {
   id: string;
   status: ReceiptGroupStatus;
+  channel: SenderChannel;
   receiptDate: string | null;
   merchantRaw: string | null;
   merchantName: string | null;
@@ -42,6 +44,7 @@ export interface ComparisonMonthRow {
 interface GroupListSqlRow {
   id: string;
   status: ReceiptGroupStatus;
+  channel: SenderChannel;
   receipt_date: string | null;
   merchant_raw: string | null;
   merchant_name: string | null;
@@ -122,6 +125,7 @@ export function mapGroupListRow(row: GroupListSqlRow): GroupListRow {
   return {
     id: row.id,
     status: row.status,
+    channel: row.channel,
     receiptDate: row.receipt_date,
     merchantRaw: row.merchant_raw,
     merchantName: row.merchant_name,
@@ -199,6 +203,7 @@ export class ReceiptQueryRepository {
       select
         g.id,
         g.status,
+        case when g.sender_address like 'tg:%' then 'telegram' else 'whatsapp' end as channel,
         g.receipt_date::text as receipt_date,
         g.merchant_raw,
         m.canonical_name as merchant_name,
@@ -226,6 +231,7 @@ export class ReceiptQueryRepository {
       select
         g.id,
         g.status,
+        case when g.sender_address like 'tg:%' then 'telegram' else 'whatsapp' end as channel,
         g.receipt_date::text as receipt_date,
         g.merchant_raw,
         m.canonical_name as merchant_name,

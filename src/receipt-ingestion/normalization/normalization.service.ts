@@ -287,7 +287,7 @@ export class NormalizationService {
     let created = 0;
     const pendingItems: PendingItem[] = [];
     for (const item of items) {
-      if (item.productId) continue;
+      if (item.productId || Number(item.amount) < 0) continue;
       const outcome = await this.normalizeItem(group, item);
       if (outcome.kind === 'matched') matched += 1;
       else if (outcome.kind === 'created') created += 1;

@@ -39,12 +39,25 @@ describe('ReplaceItemsDto', () => {
     expect(errors.some((e) => e.property === 'items')).toBe(true);
   });
 
-  it('rechaza un amount negativo', async () => {
+  it('acepta descuentos como montos negativos', async () => {
     const dto = plainToInstance(ReplaceItemsDto, {
-      items: [{ ...validItem, amount: -100 }],
+      items: [
+        {
+          descriptionRaw: '6% DESCUENTO SALCOBRAND',
+          category: 'bebe',
+          amount: -1500,
+        },
+      ],
     });
     const errors = await validate(dto);
-    expect(errors.some((e) => e.property === 'items')).toBe(true);
+    expect(errors).toHaveLength(0);
+  });
+
+  it.each([-1.5, 1.5])('rechaza montos fraccionarios: %s', async (amount) => {
+    const dto = plainToInstance(ReplaceItemsDto, {
+      items: [{ ...validItem, amount }],
+    });
+    expect(await validate(dto)).not.toHaveLength(0);
   });
 
   it('acepta productId como uuid opcional', async () => {

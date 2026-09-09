@@ -1,4 +1,5 @@
 import { ExtractionService } from './extraction.service.js';
+import { salcobrandReceipt } from './fixtures/salcobrand.js';
 import { ExtractionOutputInvalidError } from './extraction-output.schema.js';
 import type { ReceiptGroupsRepository } from '../repository/receipt-groups.repository.js';
 import type { ReceiptImagesRepository } from '../repository/receipt-images.repository.js';
@@ -132,6 +133,29 @@ const build = (options: {
 describe('ExtractionService.extractGroup', () => {
   const input = { groupId: 'g1', coupleId: 'c1', attempt: 1 };
 
+  it('persiste los cuatro descuentos de Salcobrand y deja la boleta lista por 66360', async () => {
+    const { service, items } = build({
+      group: group(),
+      rawText: JSON.stringify(salcobrandReceipt),
+    });
+    const result = await service.extractGroup(input);
+    expect(result).toMatchObject({
+      status: 'ready',
+      reasons: [],
+      summary: { total: 66360, itemCount: 8 },
+    });
+    expect(items.replaceForGroup).toHaveBeenCalledWith(
+      'g1',
+      salcobrandReceipt.items.map((item, index): unknown =>
+        expect.objectContaining({
+          amount: String(item.amount),
+          category: item.category,
+          position: index + 1,
+        }),
+      ),
+    );
+  });
+
   it('descarga las imágenes en orden, llama al modelo y persiste extracción, ítems y cabecera', async () => {
     const { service, storage, provider, extractions, items, groups } = build({
       group: group(),
@@ -154,7 +178,7 @@ describe('ExtractionService.extractGroup', () => {
         groupId: 'g1',
         coupleId: 'c1',
         model: 'test-model',
-        promptVersion: 'v1',
+        promptVersion: 'v2',
         status: 'succeeded',
         tokensIn: 100,
         tokensOut: 50,

@@ -12,6 +12,7 @@ describe('mapGroupListRow', () => {
     const result = mapGroupListRow({
       id: 'g3',
       status: 'ready',
+      channel: 'telegram',
       receipt_date: '2026-09-01',
       merchant_raw: null,
       merchant_name: null,
@@ -33,6 +34,7 @@ describe('mapGroupListRow', () => {
     const result = mapGroupListRow({
       id: 'g1',
       status: 'ready',
+      channel: 'telegram',
       receipt_date: '2026-09-01',
       merchant_raw: 'JUMBO',
       merchant_name: 'Jumbo',
@@ -46,6 +48,7 @@ describe('mapGroupListRow', () => {
     expect(result).toEqual({
       id: 'g1',
       status: 'ready',
+      channel: 'telegram',
       receiptDate: '2026-09-01',
       merchantRaw: 'JUMBO',
       merchantName: 'Jumbo',
@@ -62,6 +65,7 @@ describe('mapGroupListRow', () => {
     const result = mapGroupListRow({
       id: 'g2',
       status: 'needs_review',
+      channel: 'whatsapp',
       receipt_date: null,
       merchant_raw: null,
       merchant_name: null,
