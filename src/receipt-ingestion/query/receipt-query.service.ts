@@ -20,11 +20,11 @@ export interface ReceiptQueryInput {
 }
 
 export const QUERY_RATE_LIMITED_MESSAGE =
-  'Demasiadas consultas, intenta en un minuto.';
+  'Por ahora llegamos al límite de consultas. Espera un minuto y seguimos.';
 export const QUERY_UNRESOLVED_MESSAGE =
-  'No pude resolver la consulta. Intenta preguntarlo de otra forma.';
+  'Lo siento, esta vez no pude completar la consulta. Puedes volver a intentarlo en un momento.';
 export const QUERY_EMPTY_MESSAGE =
-  'No encontré información para responder eso.';
+  'Esta vez no obtuve una respuesta para tu consulta. Puedes volver a intentarlo en un momento.';
 
 const todayLabel = (now: Date): string =>
   new Intl.DateTimeFormat('es-CL', {

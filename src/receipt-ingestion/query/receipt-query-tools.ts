@@ -24,6 +24,12 @@ import {
   type MonthSummaryArgs,
   type SearchItemsArgs,
   type TopProductsArgs,
+  SEARCH_RECEIPTS_JSON_SCHEMA,
+  searchReceiptsArgsSchema,
+  RECEIPT_DETAIL_JSON_SCHEMA,
+  receiptDetailArgsSchema,
+  type SearchReceiptsArgs,
+  type ReceiptDetailArgs,
 } from './query-tools.schema.js';
 
 export interface QueryToolError {
@@ -38,6 +44,8 @@ interface QueryTool<TArgs> {
 }
 
 const toAmount = (value: string): number => Number(value);
+const toNullableAmount = (value: string | null): number | null =>
+  value === null ? null : toAmount(value);
 
 const categoryLabel = (category: string): string =>
   RECEIPT_PRODUCT_CATEGORY_LABELS[category as ReceiptProductCategory] ??
@@ -64,6 +72,8 @@ export class ReceiptQueryTools {
       [QUERY_TOOL_NAMES.GET_CATEGORY_SPEND, this.categorySpendTool()],
       [QUERY_TOOL_NAMES.LIST_CATEGORY_ITEMS, this.listCategoryItemsTool()],
       [QUERY_TOOL_NAMES.SEARCH_ITEMS, this.searchItemsTool()],
+      [QUERY_TOOL_NAMES.SEARCH_RECEIPTS, this.searchReceiptsTool()],
+      [QUERY_TOOL_NAMES.GET_RECEIPT_DETAIL, this.receiptDetailTool()],
     ]);
   }
 
@@ -243,6 +253,65 @@ export class ReceiptQueryTools {
             date: row.receiptDate,
             merchant: row.merchantName,
           })),
+        };
+      },
+    });
+  }
+
+  private searchReceiptsTool(): QueryTool<unknown> {
+    return this.asTool<SearchReceiptsArgs>({
+      definition: {
+        name: QUERY_TOOL_NAMES.SEARCH_RECEIPTS,
+        description:
+          'Busca boletas por comercio (nombre original, canónico o alias), sin distinguir mayúsculas ni tildes. Devuelve ID, fecha, total, cantidad de ítems y estado. Úsala para “boleta LIDER” o “detalle de la compra del Lider”. Incluye pendientes de revisión.',
+        parametersJsonSchema: SEARCH_RECEIPTS_JSON_SCHEMA,
+      },
+      schema: searchReceiptsArgsSchema,
+      run: async (coupleId, args) => {
+        const limit = RECEIPT_DEFAULTS.queryReceiptSearchLimit;
+        const offset = args.offset ?? 0;
+        const rows = await this.queries.searchReceipts(
+          coupleId,
+          args.text,
+          args.year,
+          args.month,
+          limit + 1,
+          offset,
+        );
+        return {
+          receipts: rows
+            .slice(0, limit)
+            .map((row) => ({ ...row, total: toNullableAmount(row.total) })),
+          hasMore: rows.length > limit,
+          nextOffset: rows.length > limit ? offset + limit : null,
+        };
+      },
+    });
+  }
+
+  private receiptDetailTool(): QueryTool<unknown> {
+    return this.asTool<ReceiptDetailArgs>({
+      definition: {
+        name: QUERY_TOOL_NAMES.GET_RECEIPT_DETAIL,
+        description:
+          'Obtiene el detalle completo de una boleta encontrada por search_receipts: todos sus ítems en orden, cantidades, precios y montos. No aplica el límite de 20 productos de search_items.',
+        parametersJsonSchema: RECEIPT_DETAIL_JSON_SCHEMA,
+      },
+      schema: receiptDetailArgsSchema,
+      run: async (coupleId, args) => {
+        const row = await this.queries.receiptDetail(coupleId, args.receiptId);
+        if (!row) return { receipt: null };
+        return {
+          receipt: {
+            ...row,
+            total: toNullableAmount(row.total),
+            items: row.items.map((item) => ({
+              ...item,
+              quantity: toNullableAmount(item.quantity),
+              unitPrice: toNullableAmount(item.unitPrice),
+              amount: toAmount(item.amount),
+            })),
+          },
         };
       },
     });

@@ -50,6 +50,32 @@ const build = () => {
         },
       ]),
     ),
+    searchReceipts: jest.fn().mockResolvedValue([
+      {
+        id: '11111111-1111-4111-8111-111111111111',
+        merchant: 'LIDER',
+        date: '2026-09-09',
+        total: '83665',
+        status: 'ready',
+        itemCount: 30,
+        reviewReasons: [],
+      },
+    ]),
+    receiptDetail: jest.fn().mockResolvedValue({
+      id: '11111111-1111-4111-8111-111111111111',
+      merchant: 'LIDER',
+      date: '2026-09-09',
+      total: '83665',
+      status: 'ready',
+      itemCount: 30,
+      reviewReasons: [],
+      items: Array.from({ length: 30 }, (_, index) => ({
+        description: `Producto ${index + 1}`,
+        quantity: '1',
+        unitPrice: '1000',
+        amount: '1000',
+      })),
+    }),
   };
   const tools = new ReceiptQueryTools(
     queries as unknown as ReceiptQueryRepository,
@@ -64,7 +90,7 @@ const call = (name: string, args: unknown) => ({
 });
 
 describe('ReceiptQueryTools', () => {
-  it('expone cinco definiciones con JSON Schema estricto', () => {
+  it('expone las consultas de productos y boletas con JSON Schema estricto', () => {
     const { tools } = build();
     const definitions = tools.definitions();
     expect(definitions.map((d) => d.name)).toEqual([
@@ -73,12 +99,123 @@ describe('ReceiptQueryTools', () => {
       'get_category_spend',
       'list_category_items',
       'search_items',
+      'search_receipts',
+      'get_receipt_detail',
     ]);
     for (const definition of definitions) {
       expect(definition.parametersJsonSchema['additionalProperties']).toBe(
         false,
       );
+      expect(
+        [...(definition.parametersJsonSchema['required'] as string[])].sort(),
+      ).toEqual(
+        Object.keys(
+          definition.parametersJsonSchema['properties'] as Record<
+            string,
+            unknown
+          >,
+        ).sort(),
+      );
     }
+  });
+
+  it('busca por comercio y devuelve identificadores para consultar el detalle', async () => {
+    const { tools, queries } = build();
+    const result = await tools.execute(
+      'c1',
+      call('search_receipts', { text: ' Lider ', year: 2026, month: 9 }),
+    );
+    expect(queries.searchReceipts).toHaveBeenCalledWith(
+      'c1',
+      'Lider',
+      2026,
+      9,
+      11,
+      0,
+    );
+    expect(result).toEqual({
+      receipts: [
+        {
+          id: '11111111-1111-4111-8111-111111111111',
+          merchant: 'LIDER',
+          date: '2026-09-09',
+          total: 83665,
+          status: 'ready',
+          itemCount: 30,
+          reviewReasons: [],
+        },
+      ],
+      hasMore: false,
+      nextOffset: null,
+    });
+  });
+
+  it('devuelve los 30 ítems sin aplicar el límite de búsqueda de productos', async () => {
+    const { tools, queries } = build();
+    const result = await tools.execute(
+      'c1',
+      call('get_receipt_detail', {
+        receiptId: '11111111-1111-4111-8111-111111111111',
+      }),
+    );
+    expect(queries.receiptDetail).toHaveBeenCalledWith(
+      'c1',
+      '11111111-1111-4111-8111-111111111111',
+    );
+    expect(result).toMatchObject({
+      receipt: {
+        merchant: 'LIDER',
+        total: 83665,
+        itemCount: 30,
+      },
+    });
+    const receipt = (result as { receipt: { items: unknown[] } }).receipt;
+    expect(receipt.items).toHaveLength(30);
+    expect(receipt.items[29]).toEqual({
+      description: 'Producto 30',
+      quantity: 1,
+      unitPrice: 1000,
+      amount: 1000,
+    });
+  });
+
+  it('devuelve receipt null si no existe o no pertenece al hogar', async () => {
+    const { tools, queries } = build();
+    queries.receiptDetail.mockResolvedValueOnce(null);
+    expect(
+      await tools.execute(
+        'c1',
+        call('get_receipt_detail', {
+          receiptId: '11111111-1111-4111-8111-111111111111',
+        }),
+      ),
+    ).toEqual({ receipt: null });
+  });
+
+  it('rechaza búsquedas vacías e identificadores inválidos antes de consultar', async () => {
+    const { tools, queries } = build();
+    for (const request of [
+      call('search_receipts', { text: ' ', year: 2026, month: 9 }),
+      call('get_receipt_detail', { receiptId: 'otro-hogar' }),
+      call('search_receipts', {
+        text: 'Lider',
+        year: 2026,
+        month: 9,
+        offset: -1,
+      }),
+      call('search_receipts', {
+        text: 'Lider',
+        year: 2026,
+        month: 9,
+        offset: 0.5,
+      }),
+    ]) {
+      expect(await tools.execute('c1', request)).toMatchObject({
+        error: 'invalid_arguments',
+      });
+    }
+    expect(queries.searchReceipts).not.toHaveBeenCalled();
+    expect(queries.receiptDetail).not.toHaveBeenCalled();
   });
 
   it('devuelve unknown_tool sin tocar el repositorio', async () => {

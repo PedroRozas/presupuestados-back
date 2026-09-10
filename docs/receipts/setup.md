@@ -75,7 +75,7 @@ El barrido reencola `extract-group` para grupos `extracting` cuya extracción nu
 4. `npm run start:dev`.
 5. `npm run receipts:simulate -- boleta-1.jpg` (usa `RECEIPT_SIMULATE_SENDER` y `RECEIPT_SIMULATE_BASE_URL`, este último por defecto `http://localhost:3000`).
 6. Verificar en logs `job_enqueued`, luego `image_stored`, y en Supabase: fila en `receipt_images`, objeto `.webp` en el bucket.
-7. `npm run receipts:simulate -- --text "listo"` cierra el grupo abierto de inmediato. Verificar en logs `group_closed`, luego `job_enqueued name=extract-group` y `extraction_done group=... status=ready|needs_review items=N tokens=I/O`, luego `job_enqueued name=normalize-group` y `normalize_group_done group=... merchant=matched|created matched=N created=N`, y el aviso final `text_local ... body="Boleta lista: ..."` o `"... necesita revisión ..."`. En la base, `select description_raw, category, qty, unit_price, amount, confidence, position from receipt_items where group_id = '<id>' order by position;` debe listar los ítems extraídos.
+7. `npm run receipts:simulate -- --text "listo"` cierra el grupo abierto de inmediato. Verificar en logs `group_closed`, luego `job_enqueued name=extract-group` y `extraction_done group=... status=ready|needs_review items=N tokens=I/O`, luego `job_enqueued name=normalize-group` y `normalize_group_done group=... merchant=matched|created matched=N created=N`, y el aviso final `text_local ... body="¡Lista tu boleta! ..."` o `"... Hay algunos datos por revisar ..."`. En la base, `select description_raw, category, qty, unit_price, amount, confidence, position from receipt_items where group_id = '<id>' order by position;` debe listar los ítems extraídos.
 8. Verificar la normalización en la base:
 
 ```sql
@@ -86,7 +86,7 @@ select g.merchant_raw, m.canonical_name, m.rut, m.aliases
 from receipt_groups g left join receipt_merchants m on m.id = g.merchant_id where g.id = '<id>';
 ```
 
-**Acuse de recibo:** al guardar la primera imagen de un grupo el remitente recibe "Boleta recibida, la estoy procesando…"; las páginas siguientes del mismo grupo no repiten el aviso, de modo que una boleta de varias fotos genera un solo mensaje. Una foto ya cargada (mismo sha256 para la pareja) responde "Esa foto ya la tenía, no la sumé de nuevo." en vez de descartarse en silencio. Un reintento del webhook sobre el mismo `channel_message_id` no notifica. El acuse sale después de descargar, convertir y persistir la imagen, así que confirma almacenamiento real, no solo recepción. Depende de `RECEIPT_WORKER_CONCURRENCY=1` (default): con concurrencia mayor, dos fotos simultáneas podrían resolver ambas como página 1 y duplicar el aviso.
+**Acuse de recibo:** al guardar la primera imagen de un grupo el remitente recibe "¡Gracias! Recibí tu boleta y la estoy procesando…"; las páginas siguientes del mismo grupo no repiten el aviso, de modo que una boleta de varias fotos genera un solo mensaje. Una foto ya cargada (mismo sha256 para la pareja) responde "Esta foto ya estaba guardada, así que tu boleta no se duplicó. Si tienes otra página, puedes enviármela." en vez de descartarse en silencio. Un reintento del webhook sobre el mismo `channel_message_id` no notifica. El acuse sale después de descargar, convertir y persistir la imagen, así que confirma almacenamiento real, no solo recepción. Depende de `RECEIPT_WORKER_CONCURRENCY=1` (default): con concurrencia mayor, dos fotos simultáneas podrían resolver ambas como página 1 y duplicar el aviso.
 
 Al cerrar, el grupo pasa a `extracting`, se leen sus imágenes desde Storage y un modelo multimodal extrae los ítems. El resultado queda en `receipt_items` y `receipt_extractions`; el grupo termina en `ready` o `needs_review` (motivos en `review_reasons`) y el remitente recibe un resumen. Tras 3 intentos fallidos el grupo queda `failed` y se avisa. El tope mensual por pareja (`RECEIPT_MONTHLY_EXTRACTION_CAP`) se controla en `receipt_extraction_usage`.
 
@@ -147,7 +147,7 @@ Preguntas en lenguaje natural sobre las boletas de la pareja, por dos canales:
 - **WhatsApp:** cualquier texto de un remitente de la allowlist que no sea `listo` encola `answer-query`; la respuesta llega como mensaje de texto (`notify-user`).
 - **Web:** `POST /receipts/query` con `{ "message": "<2-500 caracteres>" }` responde `{ "answer": string }`. Mismo `AuthGuard` que el resto de la API; la pestaña "Boletas" monta el chat al final.
 
-El modelo (`RECEIPT_QUERY_MODEL`) solo puede llamar cinco tools de **solo lectura**, siempre filtradas por `couple_id` en SQL parametrizado fijo (nunca text-to-SQL). Los argumentos se validan con Zod antes de ejecutar; un argumento inválido vuelve al modelo como `{ error: 'invalid_arguments' }`.
+El modelo (`RECEIPT_QUERY_MODEL`) solo puede llamar siete tools de **solo lectura**, siempre filtradas por `couple_id` en SQL parametrizado fijo (nunca text-to-SQL). Los argumentos se validan con Zod antes de ejecutar; un argumento inválido vuelve al modelo como `{ error: 'invalid_arguments' }`.
 
 | Tool | Argumentos | Devuelve |
 | --- | --- | --- |
@@ -156,8 +156,14 @@ El modelo (`RECEIPT_QUERY_MODEL`) solo puede llamar cinco tools de **solo lectur
 | `get_category_spend` | `category`, `from`, `to` (≤ 366 días) | total y detalle por mes de una categoría |
 | `list_category_items` | `category`, `year`, `month`, `limit` (1-20 o null) | productos comprados en esa categoría, con monto, fecha y comercio, ordenados por monto |
 | `search_items` | `text` (2-80), `year`, `month` | ítems cuya descripción o producto contiene el texto, con fecha, comercio y monto (máx. 20) |
+| `search_receipts` | `text` (2-80), `year`, `month`, `offset` (null o entero ≥ 0) | boletas por nombre original, canónico o alias del comercio, sin distinguir mayúsculas ni tildes de vocales; ID, fecha, total declarado, estado, motivos de revisión y cantidad de ítems (10 por página de más reciente a más antigua; `hasMore` y `nextOffset` permiten continuar) |
+| `get_receipt_detail` | `receiptId` (UUID devuelto por `search_receipts`) | cabecera y todos los ítems ordenados de esa boleta, con cantidades, precios y montos; `receipt: null` si no existe, no pertenece al hogar o no está disponible |
 
-Solo se consideran boletas `ready`. Las tools no filtran por comercio: una pregunta "¿qué compré en Jumbo?" solo se resuelve si el texto aparece en los ítems.
+Las consultas de productos y agregados solo consideran boletas `ready`. La búsqueda por comercio y el detalle incluyen `ready` y `needs_review`, indicando que los valores de estas últimas son provisionales. Ante "detalle de la compra del Lider", el modelo busca la boleta por comercio y consulta su detalle; si hay varias, pide elegir por fecha y total (salvo que se haya solicitado la última). `search_items` sigue reservado para productos.
+
+Prueba de integración opcional: `RECEIPT_QUERY_TEST_DATABASE_URL='<conexión PostgreSQL de pruebas>' npm test -- --runInBand receipt-query.integration.spec.ts`. Usa tablas temporales de sesión y datos ficticios; verifica una boleta LIDER de 30 ítems/$83.665, variantes con tildes, alias, estados, aislamiento entre hogares y caracteres especiales. No usa `DATABASE_URL` ni carga `.env`.
+
+**Tono del bot:** trato cercano, amable y paciente, en español natural de Chile. Reconoce aclaraciones, reutiliza el contexto y hace una sola pregunta concreta si falta un dato. La brevedad no impone un máximo rígido de líneas. Los avisos de recepción, revisión y errores mantienen el mismo tono, sin culpar al usuario ni confundir fallos técnicos con ausencia de compras.
 
 **Memoria conversacional:** cada hilo guarda sus últimos turnos en Redis (`receipts:query:history:<threadId>`), de modo que un seguimiento como "dame el detalle" reutiliza el período y la categoría del turno anterior. El hilo es el `senderAddress` en Telegram/WhatsApp y el `user.id` en la web, así que los miembros de una pareja no comparten conversación. No se guardan las respuestas de fallback (rate limit, sin resolver, vacía), y los turnos que matchean patrones de inyección (`detectPromptInjection`, en `src/common/utils/prompt-injection.ts`) no se persisten ni se reenvían al modelo. Si Redis falla al guardar, la respuesta igual se entrega y se registra `query_history_append_failed`.
 
@@ -166,7 +172,7 @@ Límites y variables:
 | Variable | Default | Efecto |
 | --- | --- | --- |
 | `RECEIPT_QUERY_MODEL` | obligatoria | modelo del chat (`gpt-5.4-mini` en el piloto) |
-| `RECEIPT_QUERY_MAX_TOOL_ROUNDS` | 3 | rondas de tools por pregunta; al agotarlas responde "No pude resolver la consulta" |
+| `RECEIPT_QUERY_MAX_TOOL_ROUNDS` | 3 | rondas de tools por pregunta; al agotarlas responde "Lo siento, esta vez no pude completar la consulta" |
 | `RECEIPT_QUERY_MAX_OUTPUT_TOKENS` | 1200 | tope de salida por llamada |
 | `RECEIPT_QUERY_TIMEOUT_MS` | 30000 | timeout por llamada al modelo |
 | `RECEIPT_QUERY_TEMPERATURE` / `RECEIPT_QUERY_REASONING_EFFORT` | 0 / vacío | parámetros del modelo (dejar vacíos si el modelo no los acepta) |
@@ -176,7 +182,7 @@ Límites y variables:
 | `RECEIPT_QUERY_HISTORY_TTL_SECONDS` | 1800 | vida del historial en Redis; al expirar el hilo empieza en blanco |
 | `RECEIPT_QUERY_HISTORY_MAX_TURN_CHARS` | 700 | recorte de cada turno guardado |
 
-Seguridad: el texto del usuario nunca entra al system prompt (viaja como turno de usuario), el modelo no recibe ids ni paths, y los logs solo registran `couple`, cantidad de tools, tokens y latencia (`query_answered couple=<id> history=<n> tools=<n> tokens=<in>/<out> latency=<ms> exhausted=<bool>`), nunca la pregunta ni la respuesta. El servicio antepone `Hoy es <fecha en America/Santiago>` a la pregunta para que el modelo resuelva "este mes". El endpoint web exige además que el usuario esté en `receipt_allowed_senders` (`403` si no lo está). Al exceder el rate limit ambos canales responden con el texto fijo "Demasiadas consultas, intenta en un minuto." (en la web con `200`, no `429`). Si el modelo falla en WhatsApp, el remitente recibe "No pude resolver la consulta…" en vez de silencio.
+Seguridad: el texto del usuario nunca entra al system prompt (viaja como turno de usuario), el modelo no recibe ids ni paths, y los logs solo registran `couple`, cantidad de tools, tokens y latencia (`query_answered couple=<id> history=<n> tools=<n> tokens=<in>/<out> latency=<ms> exhausted=<bool>`), nunca la pregunta ni la respuesta. El servicio antepone `Hoy es <fecha en America/Santiago>` a la pregunta para que el modelo resuelva "este mes". El endpoint web exige además que el usuario esté en `receipt_allowed_senders` (`403` si no lo está). Al exceder el rate limit ambos canales responden con el texto fijo "Por ahora llegamos al límite de consultas. Espera un minuto y seguimos." (en la web con `200`, no `429`). Si el modelo falla en WhatsApp, el remitente recibe "Lo siento, esta vez no pude completar la consulta…" en vez de silencio.
 
 Costo de referencia (piloto, `gpt-5.4-mini`): una pregunta con una tool consume ~1.600 tokens de entrada y ~80 de salida, 2-4 s de latencia. El gasto no se persiste en `receipt_extractions` (no está ligado a una boleta); vigilar por el log o el panel de OpenAI.
 
@@ -224,7 +230,7 @@ Telegram no exige verificación del negocio, así que es el canal activo mientra
 ```bash
 npm run receipts:simulate -- --telegram boleta-01.jpg
 npm run receipts:simulate -- --telegram --text listo
-# log: telegram_update_received → job_enqueued name=ingest-image → … → text_local to=tg:100000000 body="Boleta lista: …"
+# log: telegram_update_received → job_enqueued name=ingest-image → … → text_local to=tg:100000000 body="¡Lista tu boleta! …"
 npm run receipts:simulate -- --telegram --text "¿cuánto gasté este mes?"
 ```
 

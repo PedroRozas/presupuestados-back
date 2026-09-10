@@ -11,7 +11,7 @@ import {
 describe('receipt notifications', () => {
   it('avisa cuando no hay boleta abierta', () => {
     expect(buildNoOpenGroupMessage()).toBe(
-      'No tengo ninguna boleta abierta. Envíame la foto primero.',
+      'Todavía no hay una boleta pendiente de cerrar. Envíame una foto y te ayudo a registrarla.',
     );
   });
 
@@ -28,7 +28,7 @@ describe('receipt notifications', () => {
         total: 3480,
         itemCount: 2,
       }),
-    ).toBe('Boleta lista: JUMBO, 01-09-2026, total $3.480, 2 ítems.');
+    ).toBe('¡Lista tu boleta! JUMBO, 01-09-2026, total $3.480, 2 ítems.');
   });
 
   it('resume una boleta que necesita revisión con sus motivos', () => {
@@ -38,16 +38,16 @@ describe('receipt notifications', () => {
         ['total_mismatch', 'missing_date'],
       ),
     ).toBe(
-      'Boleta guardada, necesita revisión (el total no cuadra, sin fecha): comercio desconocido, sin fecha, total desconocido, 1 ítem.',
+      'Ya guardé tu boleta. Hay algunos datos por revisar (el total no cuadra, sin fecha): comercio desconocido, sin fecha, total desconocido, 1 ítem.',
     );
   });
 
   it('avisa fallo y tope mensual', () => {
     expect(buildExtractionFailedMessage()).toBe(
-      'No pude leer la boleta después de varios intentos. Quedó guardada para revisión manual.',
+      'Lo siento, no logré leer la boleta después de varios intentos. La dejé guardada para revisión manual.',
     );
     expect(buildMonthlyCapMessage()).toBe(
-      'Se alcanzó el tope mensual de lecturas de boletas. La foto quedó guardada.',
+      'Llegamos al tope mensual de lecturas de boletas. Tu foto quedó guardada para que puedas revisarla.',
     );
   });
 });

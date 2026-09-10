@@ -42,25 +42,25 @@ const summaryLine = (summary: ExtractionSummary): string => {
 
 export const buildExtractionReadyMessage = (
   summary: ExtractionSummary,
-): string => `Boleta lista: ${summaryLine(summary)}.`;
+): string => `¡Lista tu boleta! ${summaryLine(summary)}.`;
 
 export const buildExtractionReviewMessage = (
   summary: ExtractionSummary,
   reasons: ReceiptReviewReason[],
 ): string =>
-  `Boleta guardada, necesita revisión (${reasons.map((reason) => REVIEW_REASON_LABELS[reason]).join(', ')}): ${summaryLine(summary)}.`;
+  `Ya guardé tu boleta. Hay algunos datos por revisar (${reasons.map((reason) => REVIEW_REASON_LABELS[reason]).join(', ')}): ${summaryLine(summary)}.`;
 
 export const buildExtractionFailedMessage = (): string =>
-  'No pude leer la boleta después de varios intentos. Quedó guardada para revisión manual.';
+  'Lo siento, no logré leer la boleta después de varios intentos. La dejé guardada para revisión manual.';
 
 export const buildMonthlyCapMessage = (): string =>
-  'Se alcanzó el tope mensual de lecturas de boletas. La foto quedó guardada.';
+  'Llegamos al tope mensual de lecturas de boletas. Tu foto quedó guardada para que puedas revisarla.';
 
 export const buildReceiptReceivedMessage = (): string =>
-  'Boleta recibida, la estoy procesando. Si tiene más páginas mándalas ahora, o escribe listo cuando termines.';
+  '¡Gracias! Recibí tu boleta y la estoy procesando. Si tiene más páginas, puedes enviarlas ahora. Escribe listo cuando termines.';
 
 export const buildDuplicateImageMessage = (): string =>
-  'Esa foto ya la tenía, no la sumé de nuevo.';
+  'Esta foto ya estaba guardada, así que tu boleta no se duplicó. Si tienes otra página, puedes enviármela.';
 
 export const buildNoOpenGroupMessage = (): string =>
-  'No tengo ninguna boleta abierta. Envíame la foto primero.';
+  'Todavía no hay una boleta pendiente de cerrar. Envíame una foto y te ayudo a registrarla.';

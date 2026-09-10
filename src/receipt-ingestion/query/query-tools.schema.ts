@@ -10,6 +10,8 @@ export const QUERY_TOOL_NAMES = {
   GET_CATEGORY_SPEND: 'get_category_spend',
   LIST_CATEGORY_ITEMS: 'list_category_items',
   SEARCH_ITEMS: 'search_items',
+  SEARCH_RECEIPTS: 'search_receipts',
+  GET_RECEIPT_DETAIL: 'get_receipt_detail',
 } as const;
 
 export type QueryToolName =
@@ -91,6 +93,21 @@ export const searchItemsArgsSchema = z.object({
   year: yearSchema,
   month: monthSchema,
 });
+
+export const searchReceiptsArgsSchema = searchItemsArgsSchema.extend({
+  offset: z
+    .number()
+    .int()
+    .min(0)
+    .max(Number.MAX_SAFE_INTEGER)
+    .nullable()
+    .default(null),
+});
+export const receiptDetailArgsSchema = z.object({
+  receiptId: z.string().uuid(),
+});
+export type SearchReceiptsArgs = z.infer<typeof searchReceiptsArgsSchema>;
+export type ReceiptDetailArgs = z.infer<typeof receiptDetailArgsSchema>;
 
 export type MonthSummaryArgs = z.infer<typeof monthSummaryArgsSchema>;
 export type TopProductsArgs = z.infer<typeof topProductsArgsSchema>;
@@ -182,4 +199,36 @@ export const SEARCH_ITEMS_JSON_SCHEMA: Record<string, unknown> = {
     month: monthJsonSchema,
   },
   required: ['text', 'year', 'month'],
+};
+
+export const SEARCH_RECEIPTS_JSON_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    text: {
+      type: 'string',
+      description:
+        'Nombre del comercio de la boleta, ej. Lider, Líder o Jumbo (2-80 caracteres).',
+    },
+    year: yearJsonSchema,
+    month: monthJsonSchema,
+    offset: {
+      type: ['integer', 'null'],
+      description:
+        'null para la primera página; usa nextOffset de la respuesta anterior para continuar.',
+    },
+  },
+  required: ['text', 'year', 'month', 'offset'],
+};
+
+export const RECEIPT_DETAIL_JSON_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    receiptId: {
+      type: 'string',
+      description: 'ID de la boleta devuelto por search_receipts.',
+    },
+  },
+  required: ['receiptId'],
 };

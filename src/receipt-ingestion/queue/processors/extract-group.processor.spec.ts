@@ -48,7 +48,7 @@ describe('ExtractGroupProcessor', () => {
     });
     expect(queue.enqueueNotifyUser).toHaveBeenCalledWith({
       toAddress: '+56912345678',
-      body: 'Boleta lista: JUMBO, 01-09-2026, total $3.480, 2 ítems.',
+      body: '¡Lista tu boleta! JUMBO, 01-09-2026, total $3.480, 2 ítems.',
     });
     expect(queue.enqueueNormalizeGroup).toHaveBeenCalledWith({
       groupId: 'g1',
@@ -67,7 +67,7 @@ describe('ExtractGroupProcessor', () => {
     expect(queue.enqueueNotifyUser).toHaveBeenCalledWith(
       expect.objectContaining({
         body: expect.stringContaining(
-          'necesita revisión (boleta manuscrita)',
+          'datos por revisar (boleta manuscrita)',
         ) as string,
       }),
     );
@@ -111,7 +111,7 @@ describe('ExtractGroupProcessor', () => {
     await processor.process(payload, 1);
     expect(queue.enqueueNotifyUser).toHaveBeenCalledWith(
       expect.objectContaining({
-        body: expect.stringContaining('No pude leer la boleta') as string,
+        body: expect.stringContaining('no logré leer la boleta') as string,
       }),
     );
     expect(queue.enqueueNormalizeGroup).not.toHaveBeenCalled();
@@ -123,7 +123,7 @@ describe('ExtractGroupProcessor', () => {
     expect(groups.markFailed).toHaveBeenCalledWith('g1', ['extraction_failed']);
     expect(queue.enqueueNotifyUser).toHaveBeenCalledWith(
       expect.objectContaining({
-        body: expect.stringContaining('No pude leer la boleta') as string,
+        body: expect.stringContaining('no logré leer la boleta') as string,
       }),
     );
   });

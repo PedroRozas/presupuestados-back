@@ -76,6 +76,36 @@ export interface ItemSearchRow {
   merchantName: string | null;
 }
 
+export interface ReceiptSearchRow {
+  id: string;
+  merchant: string | null;
+  date: string | null;
+  total: string | null;
+  status: ReceiptGroupStatus;
+  itemCount: number;
+  reviewReasons: string[];
+}
+
+export interface ReceiptDetailRow extends ReceiptSearchRow {
+  items: {
+    description: string;
+    quantity: string | null;
+    unitPrice: string | null;
+    amount: string;
+  }[];
+}
+
+// Fold Spanish vowel accents without requiring the unaccent extension.
+const merchantSearchText = (value: SQL): SQL =>
+  sql`translate(lower(${value}), 'áéíóúü', 'aeiouu')`;
+
+const receiptHeader = sql`
+  g.id, coalesce(m.canonical_name, g.merchant_raw) as merchant,
+  g.receipt_date::text as date, g.total_declared as total, g.status,
+  g.review_reasons as "reviewReasons",
+  (select count(*)::int from receipt_items i where i.group_id = g.id and i.couple_id = g.couple_id) as "itemCount"
+`;
+
 interface TopProductSqlRow {
   name: string;
   amount: string;
@@ -417,6 +447,63 @@ export class ReceiptQueryRepository {
     return (result as unknown as { rows: ItemSearchSqlRow[] }).rows.map(
       mapItemSearchRow,
     );
+  }
+
+  async searchReceipts(
+    coupleId: string,
+    text: string,
+    year: number,
+    month: number,
+    limit: number,
+    offset = 0,
+  ): Promise<ReceiptSearchRow[]> {
+    const pattern = `%${escapeLikePattern(text.normalize('NFC'))}%`;
+    const result = await this.db.execute(sql`
+      select ${receiptHeader}
+      from receipt_groups g
+      left join receipt_merchants m on m.id = g.merchant_id and m.couple_id = g.couple_id
+      where g.couple_id = ${coupleId}
+        and g.status in ('ready', 'needs_review')
+        and g.receipt_date >= make_date(${year}, ${month}, 1)
+        and g.receipt_date < make_date(${year}, ${month}, 1) + interval '1 month'
+        and (
+          ${merchantSearchText(sql`g.merchant_raw`)} like ${merchantSearchText(sql`${pattern}`)}
+          or ${merchantSearchText(sql`m.canonical_name`)} like ${merchantSearchText(sql`${pattern}`)}
+          or exists (
+            select 1 from unnest(m.aliases) as alias(name)
+            where ${merchantSearchText(sql`alias.name`)} like ${merchantSearchText(sql`${pattern}`)}
+          )
+        )
+      order by g.receipt_date desc, g.created_at desc, g.id
+      limit ${limit}
+      offset ${offset}
+    `);
+    return (result as unknown as { rows: ReceiptSearchRow[] }).rows;
+  }
+
+  async receiptDetail(
+    coupleId: string,
+    receiptId: string,
+  ): Promise<ReceiptDetailRow | null> {
+    const result = await this.db.execute(sql`
+      select ${receiptHeader},
+        coalesce((
+          select jsonb_agg(jsonb_build_object(
+            'description', coalesce(p.canonical_name, i.description_raw),
+            'quantity', i.qty::text,
+            'unitPrice', i.unit_price::text,
+            'amount', i.amount::text
+          ) order by i.position, i.id)
+          from receipt_items i
+          left join receipt_products p on p.id = i.product_id and p.couple_id = g.couple_id
+          where i.group_id = g.id and i.couple_id = g.couple_id
+        ), '[]'::jsonb) as items
+      from receipt_groups g
+      left join receipt_merchants m on m.id = g.merchant_id and m.couple_id = g.couple_id
+      where g.couple_id = ${coupleId} and g.id = ${receiptId}
+        and g.status in ('ready', 'needs_review')
+    `);
+    return (result as unknown as { rows: ReceiptDetailRow[] }).rows[0] ?? null;
   }
 
   private monthSeriesJoin(coupleId: string, months: number): SQL {

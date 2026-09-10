@@ -114,6 +114,7 @@ export const RECEIPT_DEFAULTS = {
   queryHistoryMaxTurnChars: 700,
   queryTopProductsLimit: 10,
   querySearchLimit: 20,
+  queryReceiptSearchLimit: 10,
   queryCategoryItemsLimit: 20,
   queryTimeoutMs: 30000,
   queryTemperature: 0,

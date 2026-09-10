@@ -184,7 +184,7 @@ describe('CloseGroupProcessor', () => {
     expect(result).toEqual({ outcome: 'no_open_group' });
     expect(queue.enqueueNotifyUser).toHaveBeenCalledWith({
       toAddress: '+56912345678',
-      body: 'No tengo ninguna boleta abierta. Envíame la foto primero.',
+      body: 'Todavía no hay una boleta pendiente de cerrar. Envíame una foto y te ayudo a registrarla.',
     });
   });
 });
