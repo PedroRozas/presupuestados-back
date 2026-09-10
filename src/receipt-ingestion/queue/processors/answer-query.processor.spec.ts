@@ -22,6 +22,7 @@ describe('AnswerQueryProcessor', () => {
 
     expect(queries.answer).toHaveBeenCalledWith({
       coupleId: 'c1',
+      threadId: '+56912345678',
       message: '¿cuánto gasté?',
     });
     expect(queue.enqueueNotifyUser).toHaveBeenCalledWith({

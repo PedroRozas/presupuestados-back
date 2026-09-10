@@ -10,10 +10,12 @@ import {
   RECEIPT_QUERY_RATE_LIMIT_KEY_PREFIX,
 } from '../receipt.constants.js';
 import { QUERY_PROMPT_V1 } from './prompts/query-prompt.v1.js';
+import { ReceiptQueryHistoryStore } from './query-history.store.js';
 import { ReceiptQueryTools } from './receipt-query-tools.js';
 
 export interface ReceiptQueryInput {
   coupleId: string;
+  threadId: string;
   message: string;
 }
 
@@ -39,6 +41,7 @@ export class ReceiptQueryService {
     private readonly redis: RedisService,
     private readonly config: ReceiptConfigService,
     @Inject(LLM_QUERY_PROVIDER) private readonly llm: LlmQueryProvider,
+    private readonly history: ReceiptQueryHistoryStore,
   ) {}
 
   async answer(input: ReceiptQueryInput): Promise<string> {
@@ -49,8 +52,10 @@ export class ReceiptQueryService {
     const message = input.message
       .trim()
       .slice(0, this.config.queryMaxMessageChars);
+    const history = await this.history.load(input.threadId);
     const result = await this.llm.answerWithTools({
       systemPrompt: QUERY_PROMPT_V1.system,
+      history,
       userMessage: `Hoy es ${todayLabel(new Date())}.\nPregunta: ${message}`,
       tools: this.tools.definitions(),
       executeTool: (call) => this.tools.execute(input.coupleId, call),
@@ -59,10 +64,29 @@ export class ReceiptQueryService {
       timeoutMs: this.config.queryTimeoutMs,
     });
     this.logger.log(
-      `query_answered couple=${input.coupleId} tools=${result.toolCallCount} tokens=${result.tokensIn}/${result.tokensOut} latency=${result.latencyMs} exhausted=${result.exhausted}`,
+      `query_answered couple=${input.coupleId} history=${history.length} tools=${result.toolCallCount} tokens=${result.tokensIn}/${result.tokensOut} latency=${result.latencyMs} exhausted=${result.exhausted}`,
     );
     if (result.exhausted) return QUERY_UNRESOLVED_MESSAGE;
-    return result.text.trim() || QUERY_EMPTY_MESSAGE;
+    const answer = result.text.trim();
+    if (answer.length === 0) return QUERY_EMPTY_MESSAGE;
+    await this.rememberTurn(input.threadId, message, answer);
+    return answer;
+  }
+
+  private async rememberTurn(
+    threadId: string,
+    message: string,
+    answer: string,
+  ): Promise<void> {
+    try {
+      await this.history.append(threadId, [
+        { role: 'user', content: message },
+        { role: 'assistant', content: answer },
+      ]);
+    } catch (error: unknown) {
+      const reason = error instanceof Error ? error.name : 'unknown';
+      this.logger.error(`query_history_append_failed reason=${reason}`);
+    }
   }
 
   private async isWithinRateLimit(coupleId: string): Promise<boolean> {

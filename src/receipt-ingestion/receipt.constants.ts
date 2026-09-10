@@ -109,6 +109,9 @@ export const RECEIPT_DEFAULTS = {
   queryRateLimitWindowSeconds: 60,
   queryRateLimitMax: 10,
   queryMaxMessageChars: 500,
+  queryHistoryMaxTurns: 8,
+  queryHistoryTtlSeconds: 1800,
+  queryHistoryMaxTurnChars: 700,
   queryTopProductsLimit: 10,
   querySearchLimit: 20,
   queryTimeoutMs: 30000,
@@ -163,6 +166,7 @@ export const RECEIPT_NORMALIZATION_PROMPT_VERSION_V1 = `${RECEIPT_NORMALIZATION_
 
 export const RECEIPT_QUERY_PROMPT_VERSION_V1 = 'query-v1';
 export const RECEIPT_QUERY_RATE_LIMIT_KEY_PREFIX = 'rl:receipts:query';
+export const RECEIPT_QUERY_HISTORY_KEY_PREFIX = 'receipts:query:history';
 
 export const MERCHANT_DECISION_KEY = 'merchant';
 

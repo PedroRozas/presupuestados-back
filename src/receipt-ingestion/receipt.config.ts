@@ -323,6 +323,27 @@ export class ReceiptConfigService {
     );
   }
 
+  get queryHistoryMaxTurns(): number {
+    return this.getNumber(
+      'RECEIPT_QUERY_HISTORY_MAX_TURNS',
+      RECEIPT_DEFAULTS.queryHistoryMaxTurns,
+    );
+  }
+
+  get queryHistoryTtlSeconds(): number {
+    return this.getNumber(
+      'RECEIPT_QUERY_HISTORY_TTL_SECONDS',
+      RECEIPT_DEFAULTS.queryHistoryTtlSeconds,
+    );
+  }
+
+  get queryHistoryMaxTurnChars(): number {
+    return this.getNumber(
+      'RECEIPT_QUERY_HISTORY_MAX_TURN_CHARS',
+      RECEIPT_DEFAULTS.queryHistoryMaxTurnChars,
+    );
+  }
+
   private getString(key: string, fallback: string): string {
     const value = this.configService.get<string>(key);
     return value && value.length > 0 ? value : fallback;

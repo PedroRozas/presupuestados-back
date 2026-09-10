@@ -13,6 +13,7 @@ import type {
   LlmQueryInput,
   LlmQueryProvider,
   LlmQueryResult,
+  LlmQueryTurn,
   LlmToolCall,
 } from './llm.interfaces.js';
 import {
@@ -85,6 +86,14 @@ const toUserTurn = (text: string) => ({
   content: [{ type: 'input_text' as const, text }],
 });
 
+const toHistoryTurn = (turn: LlmQueryTurn) =>
+  turn.role === 'user'
+    ? toUserTurn(turn.content)
+    : {
+        role: 'assistant' as const,
+        content: [{ type: 'output_text' as const, text: turn.content }],
+      };
+
 const toImageContent = (image: LlmImageInput) => ({
   type: 'input_image' as const,
   image_url: `data:${image.contentType};base64,${image.buffer.toString('base64')}`,
@@ -151,7 +160,10 @@ export class OpenAiLlmProvider
   async answerWithTools(input: LlmQueryInput): Promise<LlmQueryResult> {
     const startedAt = Date.now();
     const model = this.config.queryModel;
-    const conversation: unknown[] = [toUserTurn(input.userMessage)];
+    const conversation: unknown[] = [
+      ...input.history.map(toHistoryTurn),
+      toUserTurn(input.userMessage),
+    ];
     const totals = { tokensIn: 0, tokensOut: 0, toolCallCount: 0 };
     let responseModel = model;
 

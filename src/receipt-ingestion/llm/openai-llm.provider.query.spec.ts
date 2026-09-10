@@ -47,6 +47,7 @@ const buildInput = (
   executeTool: jest.Mock<Promise<unknown>, [LlmToolCall]>,
   maxToolRounds = 3,
 ): LlmQueryInput => ({
+  history: [],
   systemPrompt: 'sys',
   userMessage: '¿cuánto gasté?',
   tools: [
@@ -74,6 +75,36 @@ const paramsOfCall = (create: jest.Mock, index: number) =>
   ];
 
 describe('OpenAiLlmProvider.answerWithTools', () => {
+  it('antepone los turnos previos al mensaje actual en la conversación', async () => {
+    const { provider, create } = buildProvider([textResponse('Detalle: ...')]);
+    const executeTool = jest.fn<Promise<unknown>, [LlmToolCall]>();
+
+    await provider.answerWithTools({
+      ...buildInput(executeTool),
+      history: [
+        { role: 'user', content: '¿en qué gasté más este mes?' },
+        { role: 'assistant', content: 'En lácteos, $12.000' },
+      ],
+      userMessage: 'dame el detalle',
+    });
+
+    const [params] = paramsOfCall(create, 0);
+    expect(params['input']).toEqual([
+      {
+        role: 'user',
+        content: [{ type: 'input_text', text: '¿en qué gasté más este mes?' }],
+      },
+      {
+        role: 'assistant',
+        content: [{ type: 'output_text', text: 'En lácteos, $12.000' }],
+      },
+      {
+        role: 'user',
+        content: [{ type: 'input_text', text: 'dame el detalle' }],
+      },
+    ]);
+  });
+
   it('sin tool calls devuelve el texto en una sola ronda con tools estrictas y sin paralelismo', async () => {
     const { provider, create } = buildProvider([
       textResponse('Gastaste $12.000'),

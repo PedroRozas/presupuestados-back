@@ -127,6 +127,7 @@ export class ReceiptsController {
     const coupleId = await this.coupleId(req);
     const answer = await this.queries.answer({
       coupleId,
+      threadId: req.user.id,
       message: dto.message,
     });
     return { answer };

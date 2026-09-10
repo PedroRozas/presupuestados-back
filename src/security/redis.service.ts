@@ -86,6 +86,18 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
     await this.getClientOrThrow().set(key, '1', 'EX', ttlSeconds);
   }
 
+  async getValue(key: string): Promise<string | null> {
+    return this.getClientOrThrow().get(key);
+  }
+
+  async setValueWithTtl(
+    key: string,
+    value: string,
+    ttlSeconds: number,
+  ): Promise<void> {
+    await this.getClientOrThrow().set(key, value, 'EX', ttlSeconds);
+  }
+
   async exists(key: string): Promise<boolean> {
     const result = await this.getClientOrThrow().exists(key);
     return result === 1;

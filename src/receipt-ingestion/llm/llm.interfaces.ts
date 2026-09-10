@@ -105,8 +105,14 @@ export interface LlmToolCall {
 
 export type LlmToolExecutor = (call: LlmToolCall) => Promise<unknown>;
 
+export interface LlmQueryTurn {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 export interface LlmQueryInput {
   systemPrompt: string;
+  history: LlmQueryTurn[];
   userMessage: string;
   tools: LlmToolDefinition[];
   executeTool: LlmToolExecutor;

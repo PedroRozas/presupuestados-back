@@ -24,6 +24,7 @@ import { ExtractGroupProcessor } from './queue/processors/extract-group.processo
 import { NormalizeGroupProcessor } from './queue/processors/normalize-group.processor.js';
 import { AnswerQueryProcessor } from './queue/processors/answer-query.processor.js';
 import { ReceiptQueryTools } from './query/receipt-query-tools.js';
+import { ReceiptQueryHistoryStore } from './query/query-history.store.js';
 import { ReceiptQueryService } from './query/receipt-query.service.js';
 import { ImageProcessorService } from './media/image-processor.service.js';
 import { ReceiptStorageService } from './storage/receipt-storage.service.js';
@@ -78,6 +79,7 @@ import { LocalMessagingClient } from './channels/local/local-messaging.client.js
     NormalizeGroupProcessor,
     AnswerQueryProcessor,
     ReceiptQueryTools,
+    ReceiptQueryHistoryStore,
     ReceiptQueryService,
     ImageProcessorService,
     ReceiptStorageService,

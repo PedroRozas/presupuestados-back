@@ -33,6 +33,7 @@ export class AnswerQueryProcessor {
     try {
       return await this.queries.answer({
         coupleId: payload.coupleId,
+        threadId: payload.senderAddress,
         message: payload.message,
       });
     } catch (error: unknown) {

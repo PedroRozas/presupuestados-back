@@ -1,4 +1,9 @@
 import { Injectable } from '@nestjs/common';
+import {
+  detectPromptInjection,
+  normalizePromptText,
+  toCanonicalPromptText,
+} from '../common/utils/prompt-injection.js';
 
 export type PromptSecurityDecision = 'allow' | 'warn' | 'block';
 
@@ -10,50 +15,6 @@ export interface PromptSecurityResult {
 
 @Injectable()
 export class PromptSecurityService {
-  private readonly blockPatterns: Array<{ pattern: RegExp; reason: string }> = [
-    {
-      pattern:
-        /\b(ignore|forget|discard)\s+(previous|above|all|your)(\s+\w+){0,3}\s+instructions?\b/i,
-      reason: 'instruction_override',
-    },
-    {
-      pattern:
-        /\b(ignora|ignorar|olvida|olvidar|descarta|descartar)\s+((todas?|las|mis|tus)\s+){0,3}(instrucciones|reglas|indicaciones)\b/i,
-      reason: 'instruction_override',
-    },
-    {
-      pattern: /\b(system|developer)\s+(prompt|message|instructions?)\b/i,
-      reason: 'prompt_disclosure',
-    },
-    {
-      pattern:
-        /\b(prompt|mensaje|instrucciones)\s+(del\s+)?(sistema|desarrollador|developer)\b/i,
-      reason: 'prompt_disclosure',
-    },
-    {
-      pattern: /\b(jailbreak|dan|developer mode|modo desarrollador)\b/i,
-      reason: 'jailbreak',
-    },
-    {
-      pattern:
-        /\b(exfiltrate|reveal|show|print|list)\s+.*\b(ids?|uuids?|tokens?|secrets?|keys?)\b/i,
-      reason: 'secret_or_id_disclosure',
-    },
-    {
-      pattern:
-        /\b(muestra|muestrame|revela|lista|imprime|expone)\s+.*\b(ids?|uuids?|tokens?|secretos?|claves?)\b/i,
-      reason: 'secret_or_id_disclosure',
-    },
-    {
-      pattern: /\bact\s+as\s+/i,
-      reason: 'role_override',
-    },
-    {
-      pattern: /\b(actua|actuar|comportate)\s+como\s+/i,
-      reason: 'role_override',
-    },
-  ];
-
   private readonly warnPatterns: Array<{ pattern: RegExp; reason: string }> = [
     {
       pattern: /\b(base64|rot13|unicode|obfusca|obfuscate)\b/i,
@@ -118,10 +79,9 @@ export class PromptSecurityService {
     const normalized = this.normalize(text);
     const canonical = this.toCanonicalText(normalized);
 
-    for (const item of this.blockPatterns) {
-      if (item.pattern.test(canonical)) {
-        return { decision: 'block', normalized, reason: item.reason };
-      }
+    const injection = detectPromptInjection(normalized);
+    if (injection) {
+      return { decision: 'block', normalized, reason: injection.reason };
     }
 
     for (const item of this.warnPatterns) {
@@ -169,19 +129,10 @@ export class PromptSecurityService {
   }
 
   normalize(text: string) {
-    return text
-      .normalize('NFKC')
-      .replace(/\p{Cf}/gu, '')
-      .replace(/\p{Cc}/gu, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 1000);
+    return normalizePromptText(text);
   }
 
   private toCanonicalText(text: string) {
-    return text
-      .normalize('NFD')
-      .replace(/\p{Diacritic}/gu, '')
-      .toLowerCase();
+    return toCanonicalPromptText(text);
   }
 }
