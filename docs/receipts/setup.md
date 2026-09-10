@@ -86,9 +86,13 @@ select g.merchant_raw, m.canonical_name, m.rut, m.aliases
 from receipt_groups g left join receipt_merchants m on m.id = g.merchant_id where g.id = '<id>';
 ```
 
+**Acuse de recibo:** al guardar la primera imagen de un grupo el remitente recibe "Boleta recibida, la estoy procesando…"; las páginas siguientes del mismo grupo no repiten el aviso, de modo que una boleta de varias fotos genera un solo mensaje. Una foto ya cargada (mismo sha256 para la pareja) responde "Esa foto ya la tenía, no la sumé de nuevo." en vez de descartarse en silencio. Un reintento del webhook sobre el mismo `channel_message_id` no notifica. El acuse sale después de descargar, convertir y persistir la imagen, así que confirma almacenamiento real, no solo recepción. Depende de `RECEIPT_WORKER_CONCURRENCY=1` (default): con concurrencia mayor, dos fotos simultáneas podrían resolver ambas como página 1 y duplicar el aviso.
+
 Al cerrar, el grupo pasa a `extracting`, se leen sus imágenes desde Storage y un modelo multimodal extrae los ítems. El resultado queda en `receipt_items` y `receipt_extractions`; el grupo termina en `ready` o `needs_review` (motivos en `review_reasons`) y el remitente recibe un resumen. Tras 3 intentos fallidos el grupo queda `failed` y se avisa. El tope mensual por pareja (`RECEIPT_MONTHLY_EXTRACTION_CAP`) se controla en `receipt_extraction_usage`.
 
 Tras la extracción se encola `normalize-group`: merchant por RUT o similitud trigram, productos por similitud; solo la zona ambigua (entre `RECEIPT_MATCH_LOW` y `RECEIPT_MATCH_HIGH`) consulta al modelo pequeño, en una sola llamada por boleta. Las decisiones se guardan como `aliases` en `receipt_products` / `receipt_merchants`.
+
+**Nombre legible del producto:** la extracción devuelve, además de `description_raw` (transcripción literal, nunca se altera), un `product_name` con las abreviaciones expandidas (`MANT 250G` → `Mantequilla 250 g`); se guarda en `receipt_items.product_name_suggested` y es `null` si el modelo no pudo deducirlo. Al crear un producto que no existe, `canonical_name` toma ese nombre y el raw en mayúsculas queda sembrado en `aliases`, de modo que la próxima boleta con la misma abreviación matchee por alias (`findCandidates` puntúa con `greatest(similarity(canonical_name), max(similarity(aliases)))`). Sin ese alias se crearía un producto duplicado por boleta. Los productos creados antes de este cambio conservan su nombre crudo.
 
 `RECEIPT_WORKER_CONCURRENCY` debe quedarse en 1: el índice único evita grupos duplicados, pero la asignación de `page_index` no es atómica y con más de un worker dos fotos del mismo grupo pueden pisarse en Storage.
 

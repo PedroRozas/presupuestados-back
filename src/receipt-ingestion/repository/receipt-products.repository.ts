@@ -42,11 +42,12 @@ export class ReceiptProductsRepository {
     coupleId: string,
     canonicalName: string,
     defaultCategory: ReceiptProductCategory,
+    aliases: string[] = [],
   ): Promise<ReceiptProduct> {
     try {
       const rows = await this.db
         .insert(receiptProducts)
-        .values({ coupleId, canonicalName, defaultCategory })
+        .values({ coupleId, canonicalName, defaultCategory, aliases })
         .returning();
       const created = rows[0];
       if (created) return created;

@@ -65,13 +65,18 @@ const build = (options: BuildOptions) => {
       Promise.resolve(options.productCandidatesByText?.[text] ?? []),
     ),
     create: jest.fn(
-      (coupleId: string, canonicalName: string, category: string) =>
+      (
+        coupleId: string,
+        canonicalName: string,
+        category: string,
+        aliases: string[] = [],
+      ) =>
         Promise.resolve({
           id: `product-${canonicalName}`,
           coupleId,
           canonicalName,
           defaultCategory: category,
-          aliases: [],
+          aliases,
         }),
     ),
     addAlias: jest.fn(() => Promise.resolve()),
@@ -181,6 +186,7 @@ describe('NormalizationService.normalizeGroup', () => {
       'c1',
       'PRODUCTO NUEVO X',
       'lacteos_huevos',
+      [],
     );
     expect(items.setProduct).toHaveBeenCalledWith(
       'i2',
@@ -573,6 +579,7 @@ describe('NormalizationService.normalizeGroup', () => {
       'c1',
       'YOGUR SABOR FRUTILLA',
       'lacteos_huevos',
+      [],
     );
     expect(items.setProduct).toHaveBeenCalledWith(
       'i2',
@@ -601,5 +608,74 @@ describe('NormalizationService.normalizeGroup', () => {
       merchant: 'created',
       items: { matched: 1, created: 1, llmDecided: 1 },
     });
+  });
+});
+
+describe('NormalizationService: nombre sugerido del producto', () => {
+  it('crea el producto con el nombre legible y guarda el raw como alias', async () => {
+    const { service, products } = build({
+      group: group(),
+      items: [
+        item({
+          id: 'i1',
+          descriptionRaw: 'MANT 250G',
+          productNameSuggested: 'Mantequilla 250 g',
+        }),
+      ],
+    });
+
+    await service.normalizeGroup({ groupId: 'g1', coupleId: 'c1' });
+
+    expect(products.create).toHaveBeenCalledWith(
+      'c1',
+      'Mantequilla 250 g',
+      'lacteos_huevos',
+      ['MANT 250G'],
+    );
+  });
+
+  it('cae al raw en mayúsculas cuando el modelo no sugirió nombre', async () => {
+    const { service, products } = build({
+      group: group(),
+      items: [
+        item({
+          id: 'i1',
+          descriptionRaw: 'MANT 250G',
+          productNameSuggested: null,
+        }),
+      ],
+    });
+
+    await service.normalizeGroup({ groupId: 'g1', coupleId: 'c1' });
+
+    expect(products.create).toHaveBeenCalledWith(
+      'c1',
+      'MANT 250G',
+      'lacteos_huevos',
+      [],
+    );
+  });
+
+  it('no duplica el alias cuando el nombre sugerido coincide con el raw', async () => {
+    const { service, products } = build({
+      group: group(),
+      items: [
+        item({
+          id: 'i1',
+          descriptionRaw: 'PLATANO',
+          productNameSuggested: 'PLATANO',
+          category: 'frutas_verduras',
+        }),
+      ],
+    });
+
+    await service.normalizeGroup({ groupId: 'g1', coupleId: 'c1' });
+
+    expect(products.create).toHaveBeenCalledWith(
+      'c1',
+      'PLATANO',
+      'frutas_verduras',
+      [],
+    );
   });
 });

@@ -14,6 +14,7 @@ const output = (overrides: Partial<ExtractionOutput>): ExtractionOutput => ({
   items: [
     {
       description_raw: 'A',
+      product_name: null,
       qty: null,
       unit_price: null,
       amount: 1290,
@@ -22,6 +23,7 @@ const output = (overrides: Partial<ExtractionOutput>): ExtractionOutput => ({
     },
     {
       description_raw: 'B',
+      product_name: null,
       qty: null,
       unit_price: null,
       amount: 2190,

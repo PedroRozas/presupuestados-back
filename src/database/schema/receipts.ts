@@ -234,6 +234,7 @@ export const receiptItems = pgTable(
       .notNull()
       .references(() => couples.id),
     descriptionRaw: text('description_raw').notNull(),
+    productNameSuggested: text('product_name_suggested'),
     productId: uuid('product_id').references(() => receiptProducts.id),
     category: receiptProductCategory('category').notNull(),
     qty: numeric('qty'),
