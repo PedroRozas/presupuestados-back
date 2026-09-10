@@ -56,5 +56,11 @@ export const buildExtractionFailedMessage = (): string =>
 export const buildMonthlyCapMessage = (): string =>
   'Se alcanzó el tope mensual de lecturas de boletas. La foto quedó guardada.';
 
+export const buildReceiptReceivedMessage = (): string =>
+  'Boleta recibida, la estoy procesando. Si tiene más páginas mándalas ahora, o escribe listo cuando termines.';
+
+export const buildDuplicateImageMessage = (): string =>
+  'Esa foto ya la tenía, no la sumé de nuevo.';
+
 export const buildNoOpenGroupMessage = (): string =>
   'No tengo ninguna boleta abierta. Envíame la foto primero.';

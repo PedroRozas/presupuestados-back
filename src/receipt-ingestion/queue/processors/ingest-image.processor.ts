@@ -11,6 +11,10 @@ import { ReceiptStorageService } from '../../storage/receipt-storage.service.js'
 import { buildStoragePath } from '../../utils/storage-path.js';
 import { maskSenderAddress } from '../../utils/sender-address.js';
 import { MEDIA_CLIENT, type MediaClient } from '../../channels/media.client.js';
+import {
+  buildDuplicateImageMessage,
+  buildReceiptReceivedMessage,
+} from '../../whatsapp/receipt-notifications.js';
 import { ReceiptQueueService } from '../receipt-queue.service.js';
 import type { IngestImageJobPayload } from '../receipt-queue.constants.js';
 import type {
@@ -19,6 +23,7 @@ import type {
 } from '../../../database/schema/index.js';
 
 const MILLISECONDS_PER_SECOND = 1000;
+const FIRST_PAGE_INDEX = 1;
 
 export type IngestImageResult =
   | { outcome: 'stored'; imageId: string; groupId: string }
@@ -58,6 +63,7 @@ export class IngestImageProcessor {
       this.logger.log(
         `image_duplicate_content sender=${maskSenderAddress(payload.senderAddress)}`,
       );
+      await this.notify(payload, buildDuplicateImageMessage());
       return { outcome: 'duplicate_content' };
     }
 
@@ -74,8 +80,21 @@ export class IngestImageProcessor {
       { kind: 'window', groupId: group.id, pageIndex: image.pageIndex },
       this.config.groupWindowSeconds * MILLISECONDS_PER_SECOND,
     );
+    if (image.pageIndex === FIRST_PAGE_INDEX) {
+      await this.notify(payload, buildReceiptReceivedMessage());
+    }
 
     return { outcome: 'stored', imageId: image.id, groupId: group.id };
+  }
+
+  private async notify(
+    payload: IngestImageJobPayload,
+    body: string,
+  ): Promise<void> {
+    await this.queue.enqueueNotifyUser({
+      toAddress: payload.senderAddress,
+      body,
+    });
   }
 
   private async storeImage(

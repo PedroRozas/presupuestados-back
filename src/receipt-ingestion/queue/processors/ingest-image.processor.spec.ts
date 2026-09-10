@@ -8,6 +8,10 @@ import type { ReceiptGroupsRepository } from '../../repository/receipt-groups.re
 import type { ReceiptImagesRepository } from '../../repository/receipt-images.repository.js';
 import type { ReceiptQueueService } from '../receipt-queue.service.js';
 import type { ReceiptConfigService } from '../../receipt.config.js';
+import {
+  buildDuplicateImageMessage,
+  buildReceiptReceivedMessage,
+} from '../../whatsapp/receipt-notifications.js';
 
 const payload: IngestImageJobPayload = {
   channelMessageId: 'wamid.1',
@@ -66,6 +70,7 @@ const buildProcessor = (overrides: {
   };
   const queue = {
     enqueueCloseGroup: jest.fn(() => Promise.resolve()),
+    enqueueNotifyUser: jest.fn(() => Promise.resolve()),
   };
   const config = { groupWindowSeconds: 90 } as ReceiptConfigService;
 
@@ -159,5 +164,45 @@ describe('IngestImageProcessor', () => {
     expect(storage.upload).not.toHaveBeenCalled();
     expect(imagesRepo.create).not.toHaveBeenCalled();
     expect(queue.enqueueCloseGroup).not.toHaveBeenCalled();
+  });
+});
+
+describe('IngestImageProcessor: acuse de recibo', () => {
+  it('avisa que la boleta llegó solo en la primera página del grupo', async () => {
+    const { processor, queue } = buildProcessor({ nextPageIndex: 1 });
+
+    await processor.process(payload);
+
+    expect(queue.enqueueNotifyUser).toHaveBeenCalledWith({
+      toAddress: '+56912345678',
+      body: buildReceiptReceivedMessage(),
+    });
+  });
+
+  it('no repite el acuse en las páginas siguientes', async () => {
+    const { processor, queue } = buildProcessor({ nextPageIndex: 2 });
+
+    await processor.process(payload);
+
+    expect(queue.enqueueNotifyUser).not.toHaveBeenCalled();
+  });
+
+  it('avisa cuando la foto ya estaba cargada', async () => {
+    const { processor, queue } = buildProcessor({ existsBySha256: true });
+
+    await processor.process(payload);
+
+    expect(queue.enqueueNotifyUser).toHaveBeenCalledWith({
+      toAddress: '+56912345678',
+      body: buildDuplicateImageMessage(),
+    });
+  });
+
+  it('no avisa cuando el webhook reintenta el mismo mensaje', async () => {
+    const { processor, queue } = buildProcessor({ existsByMessageId: true });
+
+    await processor.process(payload);
+
+    expect(queue.enqueueNotifyUser).not.toHaveBeenCalled();
   });
 });
