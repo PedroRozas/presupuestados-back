@@ -92,6 +92,12 @@ Al cerrar, el grupo pasa a `extracting`, se leen sus imágenes desde Storage y u
 
 Tras la extracción se encola `normalize-group`: merchant por RUT o similitud trigram, productos por similitud; solo la zona ambigua (entre `RECEIPT_MATCH_LOW` y `RECEIPT_MATCH_HIGH`) consulta al modelo pequeño, en una sola llamada por boleta. Las decisiones se guardan como `aliases` en `receipt_products` / `receipt_merchants`.
 
+**Cantidades y descuentos (v3):** la extracción lee cantidades y precios unitarios incluso si están en líneas separadas (`2 X 2.750`), conserva cantidades fraccionarias y no confunde tamaños de envase con unidades compradas. Los datos que no se puedan leer con seguridad quedan en `null`.
+
+El JSON original conserva las líneas monetarias impresas como evidencia. Antes de guardar `receipt_items`, el backend aplica cada descuento al producto inmediatamente anterior, manteniendo la cantidad y el precio unitario impreso y guardando `amount` como monto neto. Descuentos consecutivos se acumulan en ese producto; no se agrupan compras repetidas ni se altera el total. Por ejemplo, 5.500 seguido de -1.500 se guarda como un producto por 4.000. La boleta LIDER de 30 líneas/$83.665 pasa a 27 productos con el mismo total. Un descuento sin producto anterior o mayor que el importe disponible se conserva y marca `needs_review` con `unassigned_discount`; nunca se elimina para forzar la suma.
+
+El chat aplica la misma regla al mostrar el detalle de boletas antiguas, sin modificar sus filas almacenadas. Muestra cantidades, precio unitario impreso y total neto; los campos faltantes se identifican como no registrados. Los descuentos sin asociar aparecen en `adjustments`, separados de los productos. Recuperar cantidades ausentes en una boleta antigua requiere revisar la imagen o corregir sus datos; no se infieren de los precios de mercado. El benchmark v3 sigue comparando la transcripción monetaria original, antes de consolidar descuentos.
+
 **Nombre legible del producto:** la extracción devuelve, además de `description_raw` (transcripción literal, nunca se altera), un `product_name` con las abreviaciones expandidas (`MANT 250G` → `Mantequilla 250 g`); se guarda en `receipt_items.product_name_suggested` y es `null` si el modelo no pudo deducirlo. Al crear un producto que no existe, `canonical_name` toma ese nombre y el raw en mayúsculas queda sembrado en `aliases`, de modo que la próxima boleta con la misma abreviación matchee por alias (`findCandidates` puntúa con `greatest(similarity(canonical_name), max(similarity(aliases)))`). Sin ese alias se crearía un producto duplicado por boleta. Los productos creados antes de este cambio conservan su nombre crudo.
 
 `RECEIPT_WORKER_CONCURRENCY` debe quedarse en 1: el índice único evita grupos duplicados, pero la asignación de `page_index` no es atómica y con más de un worker dos fotos del mismo grupo pueden pisarse en Storage.
@@ -173,7 +179,7 @@ Límites y variables:
 | --- | --- | --- |
 | `RECEIPT_QUERY_MODEL` | obligatoria | modelo del chat (`gpt-5.4-mini` en el piloto) |
 | `RECEIPT_QUERY_MAX_TOOL_ROUNDS` | 3 | rondas de tools por pregunta; al agotarlas responde "Lo siento, esta vez no pude completar la consulta" |
-| `RECEIPT_QUERY_MAX_OUTPUT_TOKENS` | 1200 | tope de salida por llamada |
+| `RECEIPT_QUERY_MAX_OUTPUT_TOKENS` | 4000 | tope de salida por llamada, con espacio para detalle con cantidades; actualizar overrides antiguos de 1200 si siguen activos |
 | `RECEIPT_QUERY_TIMEOUT_MS` | 30000 | timeout por llamada al modelo |
 | `RECEIPT_QUERY_TEMPERATURE` / `RECEIPT_QUERY_REASONING_EFFORT` | 0 / vacío | parámetros del modelo (dejar vacíos si el modelo no los acepta) |
 | `RECEIPT_QUERY_RATE_LIMIT_MAX` / `_WINDOW_SECONDS` | 10 / 60 | límite por pareja, compartido entre WhatsApp y web (`rl:receipts:query:<coupleId>`) |
@@ -234,4 +240,6 @@ npm run receipts:simulate -- --telegram --text listo
 npm run receipts:simulate -- --telegram --text "¿cuánto gasté este mes?"
 ```
 
-Logs propios del canal: `telegram_update_received`, `telegram_update_unrecognized`, `telegram_webhook_rejected reason=<missing_header|missing_secret|mismatch>`, `telegram_text_sent to=tg:…`, `telegram_text_truncated`. El token del bot y las URLs de descarga nunca se loguean.
+Las respuestas de Telegram que superan 4096 caracteres se dividen en mensajes consecutivos, preferentemente por líneas y sin cortar emojis ni descartar productos.
+
+Logs propios del canal: `telegram_update_received`, `telegram_update_unrecognized`, `telegram_webhook_rejected reason=<missing_header|missing_secret|mismatch>`, `telegram_text_sent to=tg:…`. El token del bot y las URLs de descarga nunca se loguean.

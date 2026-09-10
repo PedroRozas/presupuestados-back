@@ -192,6 +192,91 @@ describe('ReceiptQueryTools', () => {
     ).toEqual({ receipt: null });
   });
 
+  it('muestra descuentos de boletas antiguas en el producto anterior conservando cantidades y total', async () => {
+    const { tools, queries } = build();
+    queries.receiptDetail.mockResolvedValueOnce({
+      id: '11111111-1111-4111-8111-111111111111',
+      merchant: 'LIDER',
+      date: '2026-09-09',
+      total: '10990',
+      status: 'ready',
+      itemCount: 6,
+      reviewReasons: [],
+      items: [
+        {
+          description: 'GAS COLA DES ZERO',
+          quantity: '2',
+          unitPrice: '2750',
+          amount: '5500',
+        },
+        {
+          description: 'RF Lleve N x',
+          quantity: null,
+          unitPrice: null,
+          amount: '-1500',
+        },
+        {
+          description: 'REBOZADO STEAK',
+          quantity: null,
+          unitPrice: null,
+          amount: '2360',
+        },
+        {
+          description: 'RF Lleve N x',
+          quantity: null,
+          unitPrice: null,
+          amount: '-360',
+        },
+        {
+          description: 'FILE POLLO',
+          quantity: '0.5',
+          unitPrice: '12780',
+          amount: '6390',
+        },
+        {
+          description: 'RF Precio Antes Ahora',
+          quantity: null,
+          unitPrice: null,
+          amount: '-1400',
+        },
+      ],
+    });
+    expect(
+      await tools.execute(
+        'c1',
+        call('get_receipt_detail', {
+          receiptId: '11111111-1111-4111-8111-111111111111',
+        }),
+      ),
+    ).toMatchObject({
+      receipt: {
+        total: 10990,
+        itemCount: 3,
+        adjustments: [],
+        items: [
+          {
+            description: 'GAS COLA DES ZERO',
+            quantity: 2,
+            unitPrice: 2750,
+            amount: 4000,
+          },
+          {
+            description: 'REBOZADO STEAK',
+            quantity: null,
+            unitPrice: null,
+            amount: 2000,
+          },
+          {
+            description: 'FILE POLLO',
+            quantity: 0.5,
+            unitPrice: 12780,
+            amount: 4990,
+          },
+        ],
+      },
+    });
+  });
+
   it('rechaza búsquedas vacías e identificadores inválidos antes de consultar', async () => {
     const { tools, queries } = build();
     for (const request of [

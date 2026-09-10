@@ -148,7 +148,25 @@ describePostgres('receipt queries against PostgreSQL', () => {
       unitPrice: null,
       amount: 2000,
     });
-    expect(result.receipt.items[29]).toMatchObject({ amount: -100 });
+    expect(result.receipt.items).toHaveLength(29);
+    expect(result.receipt.items[28]).toMatchObject({ amount: 1900 });
+    const stored = await client.query<{ amount: string }>(
+      'select amount from receipt_items where position = 30',
+    );
+    expect(stored.rows[0].amount).toBe('-100');
+  });
+
+  it('separa un descuento sin producto anterior para revisión sin perderlo ni contarlo como producto', async () => {
+    await client.query(
+      'update receipt_items set amount = -100 where position = 1',
+    );
+    const result = (await execute('get_receipt_detail', { receiptId })) as {
+      receipt: { items: unknown[]; adjustments: unknown[] };
+    };
+    expect(result.receipt.items).toHaveLength(29);
+    expect(result.receipt.adjustments).toEqual([
+      { description: 'Producto 1', quantity: 1, unitPrice: 2000, amount: -100 },
+    ]);
   });
 
   it('distingue una boleta sin ítems de una boleta inexistente', async () => {

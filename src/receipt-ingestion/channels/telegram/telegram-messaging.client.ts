@@ -19,22 +19,33 @@ export class TelegramMessagingClient implements MessagingClient {
 
   async sendText(toAddress: string, body: string): Promise<void> {
     const chatId = Number(parseSenderAddress(toAddress).id);
-    const text = this.truncate(body);
     const url = `${this.config.telegramApiBaseUrl}/bot${this.config.telegramBotToken}/sendMessage`;
-    const response = await this.fetchImpl(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text }),
-    });
-    if (!response.ok) {
-      throw new TelegramApiError('sendMessage', response.status);
+    for (const text of this.splitText(body)) {
+      const response = await this.fetchImpl(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text }),
+      });
+      if (!response.ok) {
+        throw new TelegramApiError('sendMessage', response.status);
+      }
     }
     this.logger.log(`telegram_text_sent to=${maskSenderAddress(toAddress)}`);
   }
 
-  private truncate(body: string): string {
-    if (body.length <= TELEGRAM_TEXT_MAX_CHARS) return body;
-    this.logger.warn(`telegram_text_truncated length=${body.length}`);
-    return body.slice(0, TELEGRAM_TEXT_MAX_CHARS);
+  private splitText(body: string): string[] {
+    if (body.length <= TELEGRAM_TEXT_MAX_CHARS) return [body];
+    const chunks: string[] = [];
+    let remaining = body;
+    while (remaining.length > TELEGRAM_TEXT_MAX_CHARS) {
+      const lineEnd = remaining.lastIndexOf('\n', TELEGRAM_TEXT_MAX_CHARS - 1);
+      let end = lineEnd > 0 ? lineEnd + 1 : TELEGRAM_TEXT_MAX_CHARS;
+      // Do not separate the UTF-16 halves of an emoji on a hard line break.
+      if ((remaining.codePointAt(end - 1) ?? 0) > 0xffff) end -= 1;
+      chunks.push(remaining.slice(0, end));
+      remaining = remaining.slice(end);
+    }
+    if (remaining.length > 0) chunks.push(remaining);
+    return chunks;
   }
 }

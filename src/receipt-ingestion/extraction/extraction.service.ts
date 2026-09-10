@@ -31,7 +31,8 @@ import {
 } from './extraction-output.schema.js';
 import { ExtractionUsageRepository } from './extraction-usage.repository.js';
 import { currentPeriodMonth } from './period-month.js';
-import { EXTRACTION_PROMPT_V2 } from './prompts/extraction-prompt.v2.js';
+import { EXTRACTION_PROMPT_V3 } from './prompts/extraction-prompt.v3.js';
+import { applyLineDiscounts } from '../utils/apply-line-discounts.js';
 import { evaluateReview, type ReviewVerdict } from './review-rules.js';
 
 export interface ExtractGroupInput {
@@ -141,10 +142,10 @@ export class ExtractionService {
           buffer,
           contentType: RECEIPT_IMAGE_CONTENT_TYPE,
         })),
-        systemPrompt: EXTRACTION_PROMPT_V2.system,
-        userPrompt: EXTRACTION_PROMPT_V2.user,
-        outputJsonSchema: EXTRACTION_PROMPT_V2.outputJsonSchema,
-        schemaName: EXTRACTION_PROMPT_V2.schemaName,
+        systemPrompt: EXTRACTION_PROMPT_V3.system,
+        userPrompt: EXTRACTION_PROMPT_V3.user,
+        outputJsonSchema: EXTRACTION_PROMPT_V3.outputJsonSchema,
+        schemaName: EXTRACTION_PROMPT_V3.schemaName,
         maxOutputTokens: this.config.extractionMaxOutputTokens,
         timeoutMs: this.config.extractionTimeoutMs,
       });
@@ -167,7 +168,7 @@ export class ExtractionService {
       groupId: group.id,
       coupleId: group.coupleId,
       model: usage.model,
-      promptVersion: EXTRACTION_PROMPT_V2.version,
+      promptVersion: EXTRACTION_PROMPT_V3.version,
       rawJson: result.rawText ? { raw_text: result.rawText } : null,
       tokensIn: usage.tokensIn,
       tokensOut: usage.tokensOut,
@@ -187,16 +188,21 @@ export class ExtractionService {
     result: LlmExtractionResult,
     attempt: number,
   ): Promise<ExtractionOutcome> {
-    const verdict = evaluateReview(parsed, {
+    const normalized = { ...parsed, items: applyLineDiscounts(parsed.items) };
+    const verdict = evaluateReview(normalized, {
       minConfidence: this.config.minConfidence,
       totalToleranceClp: this.config.totalToleranceClp,
     });
+    if (normalized.items.some((item) => item.amount < 0)) {
+      verdict.status = 'needs_review';
+      verdict.reasons.push(RECEIPT_REVIEW_REASONS.UNASSIGNED_DISCOUNT);
+    }
     await this.extractions.create(
       this.succeededRow(group, parsed, result, attempt),
     );
     await this.items.replaceForGroup(
       group.id,
-      this.toItems(group, parsed.items),
+      this.toItems(group, normalized.items),
     );
     await this.groups.applyExtraction(group.id, {
       status: verdict.status,
@@ -209,9 +215,9 @@ export class ExtractionService {
       sourceKind: parsed.source_kind,
     });
     this.logger.log(
-      `extraction_done group=${group.id} status=${verdict.status} items=${parsed.items.length} tokens=${result.tokensIn}/${result.tokensOut}`,
+      `extraction_done group=${group.id} status=${verdict.status} items=${normalized.items.length} tokens=${result.tokensIn}/${result.tokensOut}`,
     );
-    return this.toOutcome(parsed, verdict);
+    return this.toOutcome(normalized, verdict);
   }
 
   private succeededRow(
@@ -224,7 +230,7 @@ export class ExtractionService {
       groupId: group.id,
       coupleId: group.coupleId,
       model: result.model,
-      promptVersion: EXTRACTION_PROMPT_V2.version,
+      promptVersion: EXTRACTION_PROMPT_V3.version,
       rawJson: parsed,
       confidence: String(parsed.confidence),
       tokensIn: result.tokensIn,

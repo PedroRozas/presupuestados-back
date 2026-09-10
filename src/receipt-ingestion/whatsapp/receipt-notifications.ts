@@ -15,6 +15,8 @@ export const REVIEW_REASON_LABELS: Record<ReceiptReviewReason, string> = {
   missing_date: 'sin fecha',
   extraction_failed: 'no se pudo leer',
   monthly_cap: 'tope mensual alcanzado',
+  unassigned_discount:
+    'hay un descuento que no pude asociar al producto anterior',
 };
 
 export const formatClp = (amount: number): string =>

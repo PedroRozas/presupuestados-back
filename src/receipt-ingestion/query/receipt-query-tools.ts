@@ -7,6 +7,7 @@ import {
   type ReceiptProductCategory,
 } from '../receipt.constants.js';
 import { ReceiptQueryRepository } from '../repository/receipt-query.repository.js';
+import { applyLineDiscounts } from '../utils/apply-line-discounts.js';
 import {
   CATEGORY_SPEND_JSON_SCHEMA,
   categorySpendArgsSchema,
@@ -294,23 +295,30 @@ export class ReceiptQueryTools {
       definition: {
         name: QUERY_TOOL_NAMES.GET_RECEIPT_DETAIL,
         description:
-          'Obtiene el detalle completo de una boleta encontrada por search_receipts: todos sus ítems en orden, cantidades, precios y montos. No aplica el límite de 20 productos de search_items.',
+          'Obtiene el detalle completo: productos en orden, quantity (cantidad), unitPrice (precio unitario impreso) y amount (total neto del producto, descuentos ya aplicados). Los descuentos se aplican al producto anterior; adjustments contiene solo descuentos que requieren revisión. Muestra cantidades y precios cuando estén registrados; nunca inventes datos null. No aplica el límite de 20 productos de search_items.',
         parametersJsonSchema: RECEIPT_DETAIL_JSON_SCHEMA,
       },
       schema: receiptDetailArgsSchema,
       run: async (coupleId, args) => {
         const row = await this.queries.receiptDetail(coupleId, args.receiptId);
         if (!row) return { receipt: null };
+        const lines = applyLineDiscounts(
+          row.items.map((item) => ({
+            ...item,
+            quantity: toNullableAmount(item.quantity),
+            unitPrice: toNullableAmount(item.unitPrice),
+            amount: toAmount(item.amount),
+          })),
+        );
+        const items = lines.filter((item) => item.amount >= 0);
+        const adjustments = lines.filter((item) => item.amount < 0);
         return {
           receipt: {
             ...row,
             total: toNullableAmount(row.total),
-            items: row.items.map((item) => ({
-              ...item,
-              quantity: toNullableAmount(item.quantity),
-              unitPrice: toNullableAmount(item.unitPrice),
-              amount: toAmount(item.amount),
-            })),
+            itemCount: items.length,
+            items,
+            adjustments,
           },
         };
       },

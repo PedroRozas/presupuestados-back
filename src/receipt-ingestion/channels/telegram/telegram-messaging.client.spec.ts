@@ -31,7 +31,7 @@ describe('TelegramMessagingClient', () => {
     });
   });
 
-  it('recorta textos de más de 4096 caracteres', async () => {
+  it('envía todo el texto largo en mensajes consecutivos sin perder caracteres', async () => {
     const { fetchImpl, calls } = buildFetch(200);
     await new TelegramMessagingClient(config, fetchImpl).sendText(
       'tg:1',
@@ -39,6 +39,37 @@ describe('TelegramMessagingClient', () => {
     );
     const body = JSON.parse(calls[0].body) as { text: string };
     expect(body.text).toHaveLength(4096);
+    expect(calls).toHaveLength(2);
+    expect(
+      calls
+        .map((call) => (JSON.parse(call.body) as { text: string }).text)
+        .join(''),
+    ).toBe('x'.repeat(5000));
+  });
+
+  it('divide por líneas y conserva emojis que caen en el límite', async () => {
+    const { fetchImpl, calls } = buildFetch(200);
+    const text = 'Producto con cantidad y precio\n'.repeat(200);
+    await new TelegramMessagingClient(config, fetchImpl).sendText('tg:1', text);
+    const chunks = calls.map(
+      (call) => (JSON.parse(call.body) as { text: string }).text,
+    );
+    expect(chunks.join('')).toBe(text);
+    expect(chunks.slice(0, -1).every((chunk) => chunk.endsWith('\n'))).toBe(
+      true,
+    );
+    expect(chunks.every((chunk) => chunk.length <= 4096)).toBe(true);
+    const emojis = buildFetch(200);
+    await new TelegramMessagingClient(config, emojis.fetchImpl).sendText(
+      'tg:1',
+      'x'.repeat(4095) + '😊fin',
+    );
+    expect((JSON.parse(emojis.calls[0].body) as { text: string }).text).toBe(
+      'x'.repeat(4095),
+    );
+    expect((JSON.parse(emojis.calls[1].body) as { text: string }).text).toBe(
+      '😊fin',
+    );
   });
 
   it('lanza TelegramApiError cuando la API responde error', async () => {

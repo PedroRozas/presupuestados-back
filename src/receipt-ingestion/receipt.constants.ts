@@ -104,7 +104,7 @@ export const RECEIPT_DEFAULTS = {
   sweepIntervalMinutes: 10,
   telegramApiBaseUrl: 'https://api.telegram.org',
   staleExtractingMinutes: 30,
-  queryMaxOutputTokens: 1200,
+  queryMaxOutputTokens: 4000,
   queryMaxToolRounds: 3,
   queryRateLimitWindowSeconds: 60,
   queryRateLimitMax: 10,
@@ -148,6 +148,7 @@ export const RECEIPT_REVIEW_REASONS = {
   MISSING_DATE: 'missing_date',
   EXTRACTION_FAILED: 'extraction_failed',
   MONTHLY_CAP: 'monthly_cap',
+  UNASSIGNED_DISCOUNT: 'unassigned_discount',
 } as const;
 
 export type ReceiptReviewReason =
@@ -160,6 +161,7 @@ export const RECEIPT_EXTRACTION_STATUS = {
 
 export const RECEIPT_PROMPT_VERSION_V1 = 'v1';
 export const RECEIPT_PROMPT_VERSION_V2 = 'v2';
+export const RECEIPT_PROMPT_VERSION_V3 = 'v3';
 
 export const RECEIPT_PERIOD_TIME_ZONE = 'America/Santiago';
 

@@ -3,7 +3,7 @@ import { extname, join } from 'node:path';
 import { ConfigService } from '@nestjs/config';
 import { ReceiptConfigService } from '../../src/receipt-ingestion/receipt.config.js';
 import { OpenAiLlmProvider } from '../../src/receipt-ingestion/llm/openai-llm.provider.js';
-import { EXTRACTION_PROMPT_V2 } from '../../src/receipt-ingestion/extraction/prompts/extraction-prompt.v2.js';
+import { EXTRACTION_PROMPT_V3 } from '../../src/receipt-ingestion/extraction/prompts/extraction-prompt.v3.js';
 import { parseExtractionOutput } from '../../src/receipt-ingestion/extraction/extraction-output.schema.js';
 import {
   aggregateScores,
@@ -101,10 +101,10 @@ const runReceipt = async (
 ): Promise<ScoredRun> => {
   const result = await provider.extract({
     images: await loadImages(receipt.images),
-    systemPrompt: EXTRACTION_PROMPT_V2.system,
-    userPrompt: EXTRACTION_PROMPT_V2.user,
-    outputJsonSchema: EXTRACTION_PROMPT_V2.outputJsonSchema,
-    schemaName: EXTRACTION_PROMPT_V2.schemaName,
+    systemPrompt: EXTRACTION_PROMPT_V3.system,
+    userPrompt: EXTRACTION_PROMPT_V3.user,
+    outputJsonSchema: EXTRACTION_PROMPT_V3.outputJsonSchema,
+    schemaName: EXTRACTION_PROMPT_V3.schemaName,
     maxOutputTokens: config.extractionMaxOutputTokens,
     timeoutMs: config.extractionTimeoutMs,
   });
@@ -166,7 +166,7 @@ const main = async (): Promise<void> => {
   const date = new Date().toISOString().slice(0, DATE_LENGTH);
   await writeFile(
     RESULTS_FILE,
-    `# Benchmark de extracción\n\nFecha: ${date}. Prompt ${EXTRACTION_PROMPT_V2.version}. ${receipts.length} boletas.\n\n${table}\n`,
+    `# Benchmark de extracción\n\nFecha: ${date}. Prompt ${EXTRACTION_PROMPT_V3.version}. ${receipts.length} boletas.\n\n${table}\n`,
   );
   process.stdout.write(`\n${table}\n\nGuardado en ${RESULTS_FILE}\n`);
 };

@@ -133,8 +133,8 @@ const build = (options: {
 describe('ExtractionService.extractGroup', () => {
   const input = { groupId: 'g1', coupleId: 'c1', attempt: 1 };
 
-  it('persiste los cuatro descuentos de Salcobrand y deja la boleta lista por 66360', async () => {
-    const { service, items } = build({
+  it('aplica los descuentos al producto anterior y conserva la transcripción original para auditoría', async () => {
+    const { service, items, extractions } = build({
       group: group(),
       rawText: JSON.stringify(salcobrandReceipt),
     });
@@ -142,18 +142,109 @@ describe('ExtractionService.extractGroup', () => {
     expect(result).toMatchObject({
       status: 'ready',
       reasons: [],
-      summary: { total: 66360, itemCount: 8 },
+      summary: { total: 66360, itemCount: 4 },
     });
-    expect(items.replaceForGroup).toHaveBeenCalledWith(
-      'g1',
-      salcobrandReceipt.items.map((item, index): unknown =>
-        expect.objectContaining({
-          amount: String(item.amount),
-          category: item.category,
-          position: index + 1,
-        }),
-      ),
+    expect(items.replaceForGroup).toHaveBeenCalledWith('g1', [
+      expect.objectContaining({
+        descriptionRaw: 'ISDIN BABY NATURA',
+        amount: '15603',
+        qty: '1',
+        unitPrice: '16599',
+        category: 'farmacia',
+        position: 1,
+      }),
+      expect.objectContaining({
+        descriptionRaw: 'SIMONDS SYNDET GE',
+        amount: '3759',
+        position: 2,
+      }),
+      expect.objectContaining({
+        descriptionRaw: 'NAN 2 OPTIPRO 800',
+        amount: '23499',
+        position: 3,
+      }),
+      expect.objectContaining({
+        descriptionRaw: 'NAN 2 OPTIPRO 800',
+        amount: '23499',
+        position: 4,
+      }),
+    ]);
+    expect(extractions.create).toHaveBeenCalledWith(
+      expect.objectContaining({ rawJson: salcobrandReceipt }),
     );
+  });
+
+  it('conserva cantidades múltiples y fraccionarias junto al precio impreso y el monto neto', async () => {
+    const { service, items } = build({
+      group: group(),
+      rawText: JSON.stringify({
+        ...modelOutput,
+        total: 7000,
+        items: [
+          {
+            ...modelOutput.items[0],
+            description_raw: 'GAS COLA',
+            qty: 2,
+            unit_price: 2750,
+            amount: 5500,
+          },
+          {
+            ...modelOutput.items[0],
+            description_raw: 'RF Lleve N x',
+            qty: null,
+            unit_price: null,
+            amount: -1500,
+          },
+          {
+            ...modelOutput.items[1],
+            description_raw: 'CARNE',
+            qty: 0.5,
+            unit_price: 6000,
+            amount: 3000,
+          },
+        ],
+      }),
+    });
+    expect(await service.extractGroup(input)).toMatchObject({
+      status: 'ready',
+      summary: { total: 7000, itemCount: 2 },
+    });
+    expect(items.replaceForGroup).toHaveBeenCalledWith('g1', [
+      expect.objectContaining({ qty: '2', unitPrice: '2750', amount: '4000' }),
+      expect.objectContaining({
+        qty: '0.5',
+        unitPrice: '6000',
+        amount: '3000',
+      }),
+    ]);
+  });
+
+  it('deja en revisión un descuento sin producto anterior sin perder su monto', async () => {
+    const { service, items } = build({
+      group: group(),
+      rawText: JSON.stringify({
+        ...modelOutput,
+        total: 1190,
+        items: [
+          {
+            ...modelOutput.items[0],
+            description_raw: 'DESCUENTO',
+            qty: null,
+            unit_price: null,
+            amount: -100,
+          },
+          modelOutput.items[0],
+        ],
+      }),
+    });
+    expect(await service.extractGroup(input)).toMatchObject({
+      status: 'needs_review',
+      reasons: ['unassigned_discount'],
+    });
+    expect(items.replaceForGroup).toHaveBeenCalledWith('g1', [
+      expect.objectContaining({ amount: '-100' }),
+      expect.objectContaining({ amount: '1290' }),
+    ]);
   });
 
   it('descarga las imágenes en orden, llama al modelo y persiste extracción, ítems y cabecera', async () => {
@@ -178,7 +269,7 @@ describe('ExtractionService.extractGroup', () => {
         groupId: 'g1',
         coupleId: 'c1',
         model: 'test-model',
-        promptVersion: 'v2',
+        promptVersion: 'v3',
         status: 'succeeded',
         tokensIn: 100,
         tokensOut: 50,
