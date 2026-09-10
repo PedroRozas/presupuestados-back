@@ -10,6 +10,8 @@ import { ReceiptQueryRepository } from '../repository/receipt-query.repository.j
 import {
   CATEGORY_SPEND_JSON_SCHEMA,
   categorySpendArgsSchema,
+  LIST_CATEGORY_ITEMS_JSON_SCHEMA,
+  listCategoryItemsArgsSchema,
   MONTH_SUMMARY_JSON_SCHEMA,
   monthSummaryArgsSchema,
   QUERY_TOOL_NAMES,
@@ -18,6 +20,7 @@ import {
   TOP_PRODUCTS_JSON_SCHEMA,
   topProductsArgsSchema,
   type CategorySpendArgs,
+  type ListCategoryItemsArgs,
   type MonthSummaryArgs,
   type SearchItemsArgs,
   type TopProductsArgs,
@@ -59,6 +62,7 @@ export class ReceiptQueryTools {
       [QUERY_TOOL_NAMES.GET_MONTH_SUMMARY, this.monthSummaryTool()],
       [QUERY_TOOL_NAMES.GET_TOP_PRODUCTS, this.topProductsTool()],
       [QUERY_TOOL_NAMES.GET_CATEGORY_SPEND, this.categorySpendTool()],
+      [QUERY_TOOL_NAMES.LIST_CATEGORY_ITEMS, this.listCategoryItemsTool()],
       [QUERY_TOOL_NAMES.SEARCH_ITEMS, this.searchItemsTool()],
     ]);
   }
@@ -179,6 +183,37 @@ export class ReceiptQueryTools {
           label: categoryLabel(args.category),
           total,
           byMonth,
+        };
+      },
+    });
+  }
+
+  private listCategoryItemsTool(): QueryTool<unknown> {
+    return this.asTool<ListCategoryItemsArgs>({
+      definition: {
+        name: QUERY_TOOL_NAMES.LIST_CATEGORY_ITEMS,
+        description:
+          'Lista los productos comprados en una categoría durante un mes, con monto, fecha y comercio. Úsala cuando pidan el detalle o el desglose de una categoría.',
+        parametersJsonSchema: LIST_CATEGORY_ITEMS_JSON_SCHEMA,
+      },
+      schema: listCategoryItemsArgsSchema,
+      run: async (coupleId, args) => {
+        const rows = await this.queries.listCategoryItems(
+          coupleId,
+          args.category,
+          args.year,
+          args.month,
+          args.limit ?? RECEIPT_DEFAULTS.queryCategoryItemsLimit,
+        );
+        return {
+          category: args.category,
+          label: categoryLabel(args.category),
+          items: rows.map((row) => ({
+            description: row.productName ?? row.description,
+            amount: toAmount(row.amount),
+            date: row.receiptDate,
+            merchant: row.merchantName,
+          })),
         };
       },
     });

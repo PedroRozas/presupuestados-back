@@ -104,7 +104,7 @@ export const RECEIPT_DEFAULTS = {
   sweepIntervalMinutes: 10,
   telegramApiBaseUrl: 'https://api.telegram.org',
   staleExtractingMinutes: 30,
-  queryMaxOutputTokens: 800,
+  queryMaxOutputTokens: 1200,
   queryMaxToolRounds: 3,
   queryRateLimitWindowSeconds: 60,
   queryRateLimitMax: 10,
@@ -114,6 +114,7 @@ export const RECEIPT_DEFAULTS = {
   queryHistoryMaxTurnChars: 700,
   queryTopProductsLimit: 10,
   querySearchLimit: 20,
+  queryCategoryItemsLimit: 20,
   queryTimeoutMs: 30000,
   queryTemperature: 0,
 } as const;

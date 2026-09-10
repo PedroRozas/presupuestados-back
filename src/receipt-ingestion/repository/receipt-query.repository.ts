@@ -356,6 +356,37 @@ export class ReceiptQueryRepository {
     );
   }
 
+  async listCategoryItems(
+    coupleId: string,
+    category: string,
+    year: number,
+    month: number,
+    limit: number,
+  ): Promise<ItemSearchRow[]> {
+    const result = await this.db.execute(sql`
+      select
+        i.description_raw as description,
+        p.canonical_name as product_name,
+        i.amount,
+        g.receipt_date::text as receipt_date,
+        m.canonical_name as merchant_name
+      from receipt_items i
+      join receipt_groups g on g.id = i.group_id
+      left join receipt_products p on p.id = i.product_id
+      left join receipt_merchants m on m.id = g.merchant_id
+      where g.couple_id = ${coupleId}
+        and g.status = 'ready'
+        and i.category = ${category}::receipt_product_category
+        and g.receipt_date >= make_date(${year}, ${month}, 1)
+        and g.receipt_date < make_date(${year}, ${month}, 1) + interval '1 month'
+      order by i.amount desc, g.receipt_date desc
+      limit ${limit}
+    `);
+    return (result as unknown as { rows: ItemSearchSqlRow[] }).rows.map(
+      mapItemSearchRow,
+    );
+  }
+
   async searchItems(
     coupleId: string,
     text: string,

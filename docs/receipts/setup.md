@@ -143,16 +143,19 @@ Preguntas en lenguaje natural sobre las boletas de la pareja, por dos canales:
 - **WhatsApp:** cualquier texto de un remitente de la allowlist que no sea `listo` encola `answer-query`; la respuesta llega como mensaje de texto (`notify-user`).
 - **Web:** `POST /receipts/query` con `{ "message": "<2-500 caracteres>" }` responde `{ "answer": string }`. Mismo `AuthGuard` que el resto de la API; la pestaña "Boletas" monta el chat al final.
 
-El modelo (`RECEIPT_QUERY_MODEL`) solo puede llamar cuatro tools de **solo lectura**, siempre filtradas por `couple_id` en SQL parametrizado fijo (nunca text-to-SQL). Los argumentos se validan con Zod antes de ejecutar; un argumento inválido vuelve al modelo como `{ error: 'invalid_arguments' }`.
+El modelo (`RECEIPT_QUERY_MODEL`) solo puede llamar cinco tools de **solo lectura**, siempre filtradas por `couple_id` en SQL parametrizado fijo (nunca text-to-SQL). Los argumentos se validan con Zod antes de ejecutar; un argumento inválido vuelve al modelo como `{ error: 'invalid_arguments' }`.
 
 | Tool | Argumentos | Devuelve |
 | --- | --- | --- |
 | `get_month_summary` | `year`, `month` | total del mes, cantidad de boletas y desglose por categoría |
 | `get_top_products` | `year`, `month`, `limit` (1-10 o null) | productos con mayor gasto (nombre canónico o descripción) |
 | `get_category_spend` | `category`, `from`, `to` (≤ 366 días) | total y detalle por mes de una categoría |
+| `list_category_items` | `category`, `year`, `month`, `limit` (1-20 o null) | productos comprados en esa categoría, con monto, fecha y comercio, ordenados por monto |
 | `search_items` | `text` (2-80), `year`, `month` | ítems cuya descripción o producto contiene el texto, con fecha, comercio y monto (máx. 20) |
 
 Solo se consideran boletas `ready`. Las tools no filtran por comercio: una pregunta "¿qué compré en Jumbo?" solo se resuelve si el texto aparece en los ítems.
+
+**Memoria conversacional:** cada hilo guarda sus últimos turnos en Redis (`receipts:query:history:<threadId>`), de modo que un seguimiento como "dame el detalle" reutiliza el período y la categoría del turno anterior. El hilo es el `senderAddress` en Telegram/WhatsApp y el `user.id` en la web, así que los miembros de una pareja no comparten conversación. No se guardan las respuestas de fallback (rate limit, sin resolver, vacía), y los turnos que matchean patrones de inyección (`detectPromptInjection`, en `src/common/utils/prompt-injection.ts`) no se persisten ni se reenvían al modelo. Si Redis falla al guardar, la respuesta igual se entrega y se registra `query_history_append_failed`.
 
 Límites y variables:
 
@@ -160,13 +163,16 @@ Límites y variables:
 | --- | --- | --- |
 | `RECEIPT_QUERY_MODEL` | obligatoria | modelo del chat (`gpt-5.4-mini` en el piloto) |
 | `RECEIPT_QUERY_MAX_TOOL_ROUNDS` | 3 | rondas de tools por pregunta; al agotarlas responde "No pude resolver la consulta" |
-| `RECEIPT_QUERY_MAX_OUTPUT_TOKENS` | 800 | tope de salida por llamada |
+| `RECEIPT_QUERY_MAX_OUTPUT_TOKENS` | 1200 | tope de salida por llamada |
 | `RECEIPT_QUERY_TIMEOUT_MS` | 30000 | timeout por llamada al modelo |
 | `RECEIPT_QUERY_TEMPERATURE` / `RECEIPT_QUERY_REASONING_EFFORT` | 0 / vacío | parámetros del modelo (dejar vacíos si el modelo no los acepta) |
 | `RECEIPT_QUERY_RATE_LIMIT_MAX` / `_WINDOW_SECONDS` | 10 / 60 | límite por pareja, compartido entre WhatsApp y web (`rl:receipts:query:<coupleId>`) |
 | `RECEIPT_QUERY_MAX_MESSAGE_CHARS` | 500 | recorte del mensaje antes de enviarlo al modelo |
+| `RECEIPT_QUERY_HISTORY_MAX_TURNS` | 8 | turnos de conversación que se reenvían al modelo por hilo |
+| `RECEIPT_QUERY_HISTORY_TTL_SECONDS` | 1800 | vida del historial en Redis; al expirar el hilo empieza en blanco |
+| `RECEIPT_QUERY_HISTORY_MAX_TURN_CHARS` | 700 | recorte de cada turno guardado |
 
-Seguridad: el texto del usuario nunca entra al system prompt (viaja como turno de usuario), el modelo no recibe ids ni paths, y los logs solo registran `couple`, cantidad de tools, tokens y latencia (`query_answered couple=<id> tools=<n> tokens=<in>/<out> latency=<ms> exhausted=<bool>`), nunca la pregunta ni la respuesta. El servicio antepone `Hoy es <fecha en America/Santiago>` a la pregunta para que el modelo resuelva "este mes". El endpoint web exige además que el usuario esté en `receipt_allowed_senders` (`403` si no lo está). Al exceder el rate limit ambos canales responden con el texto fijo "Demasiadas consultas, intenta en un minuto." (en la web con `200`, no `429`). Si el modelo falla en WhatsApp, el remitente recibe "No pude resolver la consulta…" en vez de silencio.
+Seguridad: el texto del usuario nunca entra al system prompt (viaja como turno de usuario), el modelo no recibe ids ni paths, y los logs solo registran `couple`, cantidad de tools, tokens y latencia (`query_answered couple=<id> history=<n> tools=<n> tokens=<in>/<out> latency=<ms> exhausted=<bool>`), nunca la pregunta ni la respuesta. El servicio antepone `Hoy es <fecha en America/Santiago>` a la pregunta para que el modelo resuelva "este mes". El endpoint web exige además que el usuario esté en `receipt_allowed_senders` (`403` si no lo está). Al exceder el rate limit ambos canales responden con el texto fijo "Demasiadas consultas, intenta en un minuto." (en la web con `200`, no `429`). Si el modelo falla en WhatsApp, el remitente recibe "No pude resolver la consulta…" en vez de silencio.
 
 Costo de referencia (piloto, `gpt-5.4-mini`): una pregunta con una tool consume ~1.600 tokens de entrada y ~80 de salida, 2-4 s de latencia. El gasto no se persiste en `receipt_extractions` (no está ligado a una boleta); vigilar por el log o el panel de OpenAI.
 

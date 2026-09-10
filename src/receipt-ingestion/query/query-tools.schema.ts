@@ -8,6 +8,7 @@ export const QUERY_TOOL_NAMES = {
   GET_MONTH_SUMMARY: 'get_month_summary',
   GET_TOP_PRODUCTS: 'get_top_products',
   GET_CATEGORY_SPEND: 'get_category_spend',
+  LIST_CATEGORY_ITEMS: 'list_category_items',
   SEARCH_ITEMS: 'search_items',
 } as const;
 
@@ -73,6 +74,18 @@ export const categorySpendArgsSchema = z
     `El rango no puede superar ${MAX_RANGE_DAYS} días`,
   );
 
+export const listCategoryItemsArgsSchema = z.object({
+  category: z.enum(RECEIPT_PRODUCT_CATEGORIES),
+  year: yearSchema,
+  month: monthSchema,
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(RECEIPT_DEFAULTS.queryCategoryItemsLimit)
+    .nullable(),
+});
+
 export const searchItemsArgsSchema = z.object({
   text: z.string().trim().min(MIN_SEARCH_CHARS).max(MAX_SEARCH_CHARS),
   year: yearSchema,
@@ -82,6 +95,7 @@ export const searchItemsArgsSchema = z.object({
 export type MonthSummaryArgs = z.infer<typeof monthSummaryArgsSchema>;
 export type TopProductsArgs = z.infer<typeof topProductsArgsSchema>;
 export type CategorySpendArgs = z.infer<typeof categorySpendArgsSchema>;
+export type ListCategoryItemsArgs = z.infer<typeof listCategoryItemsArgsSchema>;
 export type SearchItemsArgs = z.infer<typeof searchItemsArgsSchema>;
 
 const yearJsonSchema = {
@@ -135,6 +149,25 @@ export const CATEGORY_SPEND_JSON_SCHEMA: Record<string, unknown> = {
     to: isoDateJsonSchema,
   },
   required: ['category', 'from', 'to'],
+};
+
+export const LIST_CATEGORY_ITEMS_JSON_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    category: {
+      type: 'string',
+      enum: [...RECEIPT_PRODUCT_CATEGORIES],
+      description: 'Categoría de la taxonomía',
+    },
+    year: yearJsonSchema,
+    month: monthJsonSchema,
+    limit: {
+      type: ['integer', 'null'],
+      description: `Cantidad de ítems, máximo ${RECEIPT_DEFAULTS.queryCategoryItemsLimit}; null usa el máximo`,
+    },
+  },
+  required: ['category', 'year', 'month', 'limit'],
 };
 
 export const SEARCH_ITEMS_JSON_SCHEMA: Record<string, unknown> = {

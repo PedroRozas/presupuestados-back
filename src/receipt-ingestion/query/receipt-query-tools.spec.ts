@@ -21,6 +21,24 @@ const build = () => {
         { month: '2026-09', amount: '2500', itemCount: 2 },
       ]),
     ),
+    listCategoryItems: jest.fn(() =>
+      Promise.resolve([
+        {
+          description: 'LECHE ENTERA 1L',
+          productName: 'Leche entera 1L',
+          amount: '3200',
+          receiptDate: '2026-09-03',
+          merchantName: 'Jumbo',
+        },
+        {
+          description: 'HUEVOS 12U',
+          productName: null,
+          amount: '4230',
+          receiptDate: '2026-09-07',
+          merchantName: 'Líder',
+        },
+      ]),
+    ),
     searchItems: jest.fn(() =>
       Promise.resolve([
         {
@@ -46,13 +64,14 @@ const call = (name: string, args: unknown) => ({
 });
 
 describe('ReceiptQueryTools', () => {
-  it('expone cuatro definiciones con JSON Schema estricto', () => {
+  it('expone cinco definiciones con JSON Schema estricto', () => {
     const { tools } = build();
     const definitions = tools.definitions();
     expect(definitions.map((d) => d.name)).toEqual([
       'get_month_summary',
       'get_top_products',
       'get_category_spend',
+      'list_category_items',
       'search_items',
     ]);
     for (const definition of definitions) {
@@ -168,5 +187,83 @@ describe('ReceiptQueryTools', () => {
         },
       ],
     });
+  });
+});
+
+describe('ReceiptQueryTools.list_category_items', () => {
+  it('lista los ítems de una categoría con producto, monto, fecha y comercio', async () => {
+    const { tools, queries } = build();
+    const result = await tools.execute(
+      'c1',
+      call('list_category_items', {
+        category: 'lacteos_huevos',
+        year: 2026,
+        month: 9,
+        limit: null,
+      }),
+    );
+
+    expect(queries.listCategoryItems).toHaveBeenCalledWith(
+      'c1',
+      'lacteos_huevos',
+      2026,
+      9,
+      20,
+    );
+    expect(result).toEqual({
+      category: 'lacteos_huevos',
+      label: 'Lácteos y huevos',
+      items: [
+        {
+          description: 'Leche entera 1L',
+          amount: 3200,
+          date: '2026-09-03',
+          merchant: 'Jumbo',
+        },
+        {
+          description: 'HUEVOS 12U',
+          amount: 4230,
+          date: '2026-09-07',
+          merchant: 'Líder',
+        },
+      ],
+    });
+  });
+
+  it('respeta el límite pedido', async () => {
+    const { tools, queries } = build();
+    await tools.execute(
+      'c1',
+      call('list_category_items', {
+        category: 'lacteos_huevos',
+        year: 2026,
+        month: 9,
+        limit: 5,
+      }),
+    );
+    expect(queries.listCategoryItems).toHaveBeenCalledWith(
+      'c1',
+      'lacteos_huevos',
+      2026,
+      9,
+      5,
+    );
+  });
+
+  it('rechaza una categoría fuera de la taxonomía', async () => {
+    const { tools, queries } = build();
+    const result = await tools.execute(
+      'c1',
+      call('list_category_items', {
+        category: 'inventada',
+        year: 2026,
+        month: 9,
+        limit: null,
+      }),
+    );
+    expect(result).toEqual(
+      expect.objectContaining({ error: 'invalid_arguments' }),
+    );
+    expect(queries.listCategoryItems).not.toHaveBeenCalled();
   });
 });
