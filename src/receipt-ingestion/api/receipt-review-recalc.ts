@@ -33,6 +33,7 @@ const toExtractionOutput = (input: ReviewRecalcInput): ExtractionOutput => ({
   warnings: [],
   items: input.itemAmounts.map((amount) => ({
     description_raw: PLACEHOLDER_DESCRIPTION,
+    product_name: null,
     qty: null,
     unit_price: null,
     amount,

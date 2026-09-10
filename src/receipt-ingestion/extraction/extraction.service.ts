@@ -260,6 +260,7 @@ export class ExtractionService {
       groupId: group.id,
       coupleId: group.coupleId,
       descriptionRaw: item.description_raw,
+      productNameSuggested: item.product_name ?? null,
       category: item.category,
       qty: toNumericString(item.qty),
       unitPrice: toNumericString(item.unit_price),

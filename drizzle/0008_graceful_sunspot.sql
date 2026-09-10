@@ -1,0 +1,1 @@
+ALTER TABLE "receipt_items" ADD COLUMN "product_name_suggested" text;

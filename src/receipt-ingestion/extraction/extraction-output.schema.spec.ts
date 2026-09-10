@@ -94,3 +94,53 @@ describe('parseExtractionOutput', () => {
     ).toThrow(ExtractionOutputInvalidError);
   });
 });
+
+describe('product_name en los ítems', () => {
+  const itemWith = (extra: Record<string, unknown>) =>
+    JSON.stringify({
+      merchant_raw: 'JUMBO',
+      merchant_rut: null,
+      receipt_date: '2026-09-03',
+      total: 2850,
+      currency: 'CLP',
+      source_kind: 'printed',
+      items: [
+        {
+          description_raw: 'MANT 250G',
+          qty: null,
+          unit_price: null,
+          amount: 2850,
+          category: 'lacteos_huevos',
+          confidence: 0.9,
+          ...extra,
+        },
+      ],
+      confidence: 0.9,
+      warnings: [],
+    });
+
+  it('conserva el nombre sugerido junto a la descripción literal', () => {
+    const parsed = parseExtractionOutput(
+      itemWith({ product_name: 'Mantequilla 250 g' }),
+    );
+    expect(parsed.items[0]?.description_raw).toBe('MANT 250G');
+    expect(parsed.items[0]?.product_name).toBe('Mantequilla 250 g');
+  });
+
+  it('acepta null cuando el modelo no logra proponer un nombre', () => {
+    const parsed = parseExtractionOutput(itemWith({ product_name: null }));
+    expect(parsed.items[0]?.product_name).toBeNull();
+  });
+
+  it('tolera respuestas sin el campo tratándolo como ausente', () => {
+    const parsed = parseExtractionOutput(itemWith({}));
+    expect(parsed.items[0]?.product_name ?? null).toBeNull();
+  });
+
+  it('descarta un nombre vacío o solo espacios', () => {
+    expect(
+      parseExtractionOutput(itemWith({ product_name: '   ' })).items[0]
+        ?.product_name ?? null,
+    ).toBeNull();
+  });
+});

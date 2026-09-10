@@ -13,6 +13,7 @@ export const salcobrandReceipt: ExtractionOutput = {
   items: [
     {
       description_raw: 'ISDIN BABY NATURA',
+      product_name: null,
       qty: 1,
       unit_price: 16599,
       amount: 16599,
@@ -21,6 +22,7 @@ export const salcobrandReceipt: ExtractionOutput = {
     },
     {
       description_raw: '6% DESCUENTO SALCOBRAND',
+      product_name: null,
       qty: null,
       unit_price: null,
       amount: -996,
@@ -29,6 +31,7 @@ export const salcobrandReceipt: ExtractionOutput = {
     },
     {
       description_raw: 'SIMONDS SYNDET GE',
+      product_name: null,
       qty: 1,
       unit_price: 3999,
       amount: 3999,
@@ -37,6 +40,7 @@ export const salcobrandReceipt: ExtractionOutput = {
     },
     {
       description_raw: '6% DESCUENTO SALCOBRAND',
+      product_name: null,
       qty: null,
       unit_price: null,
       amount: -240,
@@ -45,6 +49,7 @@ export const salcobrandReceipt: ExtractionOutput = {
     },
     {
       description_raw: 'NAN 2 OPTIPRO 800',
+      product_name: null,
       qty: 1,
       unit_price: 24999,
       amount: 24999,
@@ -53,6 +58,7 @@ export const salcobrandReceipt: ExtractionOutput = {
     },
     {
       description_raw: '6% DESCUENTO SALCOBRAND',
+      product_name: null,
       qty: null,
       unit_price: null,
       amount: -1500,
@@ -61,6 +67,7 @@ export const salcobrandReceipt: ExtractionOutput = {
     },
     {
       description_raw: 'NAN 2 OPTIPRO 800',
+      product_name: null,
       qty: 1,
       unit_price: 24999,
       amount: 24999,
@@ -69,6 +76,7 @@ export const salcobrandReceipt: ExtractionOutput = {
     },
     {
       description_raw: '6% DESCUENTO SALCOBRAND',
+      product_name: null,
       qty: null,
       unit_price: null,
       amount: -1500,

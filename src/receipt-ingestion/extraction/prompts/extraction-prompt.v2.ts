@@ -33,6 +33,11 @@ const itemJsonSchema = {
       type: 'string',
       description: 'Descripción tal como aparece impresa, sin corregir.',
     },
+    product_name: {
+      type: ['string', 'null'],
+      description:
+        'Nombre legible del producto, expandiendo abreviaciones de la descripción impresa. null si no puedes deducirlo con seguridad.',
+    },
     qty: { ...nullableNumber, description: 'Cantidad si está impresa.' },
     unit_price: {
       ...nullableNumber,
@@ -55,6 +60,7 @@ const itemJsonSchema = {
   },
   required: [
     'description_raw',
+    'product_name',
     'qty',
     'unit_price',
     'amount',
@@ -69,6 +75,7 @@ export const EXTRACTION_PROMPT_V2: ExtractionPrompt = {
   system: `Eres un extractor de boletas de supermercado y comercios chilenos.
 Recibes una o varias fotos de la misma boleta, en orden. Devuelves únicamente el JSON pedido.
 Lees literalmente lo impreso: no corrijas ortografía ni completes descripciones truncadas.
+description_raw es siempre la transcripción literal. Además, en product_name entrega el nombre legible del mismo ítem: expande abreviaciones evidentes del retail chileno (MANT 250G = Mantequilla 250 g, LECH ENT = Leche entera, YOG = Yogurt, JAB LIQ = Jabón líquido), conserva marca, formato y tamaño si están impresos, y usa mayúscula solo inicial. Si la descripción es ilegible o ambigua, product_name es null: nunca adivines el producto.
 Los montos son pesos chilenos enteros: 16.599 significa 16599, no 16.599.
 Representa cada línea monetaria de producto o descuento exactamente una vez y en el orden impreso:
 - Conserva el monto impreso del producto, sin restarle los descuentos que figuren en otras líneas.

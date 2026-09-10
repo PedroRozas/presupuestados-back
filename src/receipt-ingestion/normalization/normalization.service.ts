@@ -348,10 +348,15 @@ export class NormalizationService {
     item: ReceiptItem,
     canonicalRaw: string,
   ): Promise<ItemNormalization> {
+    const suggested = item.productNameSuggested?.trim();
+    const canonicalName =
+      suggested && suggested.length > 0 ? suggested : canonicalRaw;
+    const aliases = canonicalName === canonicalRaw ? [] : [canonicalRaw];
     const created = await this.products.create(
       group.coupleId,
-      canonicalRaw,
+      canonicalName,
       item.category,
+      aliases,
     );
     await this.items.setProduct(item.id, created.id);
     return { kind: 'created' };

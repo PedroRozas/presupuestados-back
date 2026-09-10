@@ -12,6 +12,7 @@ const output = (overrides: Partial<ExtractionOutput>): ExtractionOutput => ({
   warnings: [],
   items: [1290, 2190].map((amount) => ({
     description_raw: 'x',
+    product_name: null,
     qty: null,
     unit_price: null,
     amount,

@@ -27,8 +27,19 @@ const isoDateSchema = z
   .regex(ISO_DATE_PATTERN)
   .refine(isRealCalendarDate, { message: 'fecha inexistente' });
 
+const blankToNull = (value: string | null | undefined): string | null => {
+  const trimmed = value?.trim() ?? '';
+  return trimmed.length === 0 ? null : trimmed;
+};
+
 const itemSchema = z.object({
   description_raw: z.string().min(1),
+  product_name: z
+    .string()
+    .nullable()
+    .optional()
+    .transform(blankToNull)
+    .catch(null),
   qty: z.number().nullable(),
   unit_price: z.number().nullable(),
   amount: z.number(),
